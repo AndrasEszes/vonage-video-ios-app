@@ -800,6 +800,28 @@ struct BottomBarButtonsAssemblerTests {
         #expect(reference.object == nil)
     }
 
+    @Test(arguments: [MeetingRoomFeature.archiving, .captions, .backgroundEffects, .audioEffects])
+    @MainActor
+    func replacingFeatureModelReleasesOldModelAndObservesReplacement(feature: MeetingRoomFeature) async {
+        let container = makeContainer(enabledFeatures: [feature])
+        let assembler = BottomBarButtonsAssembler(container: container, enabledFeatures: [feature])
+        let oldReference = bindLifetimeModel(feature, container: container, assembler: assembler)
+        var emittedUpdatesCount = 0
+        let cancellable = assembler.buttonsDidChange.sink {
+            emittedUpdatesCount += 1
+        }
+
+        let replacementReference = bindLifetimeModel(feature, container: container, assembler: assembler)
+        #expect(oldReference.object == nil)
+
+        updateLifetimeModel(feature, assembler: assembler)
+        await waitUntil { emittedUpdatesCount == 1 }
+
+        #expect(replacementReference.object != nil)
+        #expect(emittedUpdatesCount == 1)
+        cancellable.cancel()
+    }
+
     @MainActor
     private func bindLifetimeModel(
         _ feature: MeetingRoomFeature, container: MeetingRoomSDKContainer, assembler: BottomBarButtonsAssembler
@@ -827,6 +849,26 @@ struct BottomBarButtonsAssemblerTests {
         default: Issue.record("Unsupported lifetime fixture")
         }
         return reference
+    }
+
+    @MainActor
+    private func updateLifetimeModel(_ feature: MeetingRoomFeature, assembler: BottomBarButtonsAssembler) {
+        switch feature {
+        case .archiving:
+            assembler.archiveButtonViewModel?.state = .archiving("replacement-archive")
+        case .captions:
+            assembler.captionsButtonViewModel?.state = .enabled("replacement-captions")
+        case .backgroundEffects:
+            if let viewModel = assembler.videoEffectsViewModel {
+                viewModel.selectEffect(viewModel.selectedEffect == .blurHigh ? .none : .blurHigh)
+            } else {
+                Issue.record("Missing replacement background effects view model")
+            }
+        case .audioEffects:
+            assembler.meetingNoiseSuppressionButtonViewModel?.state = .enabled
+        default:
+            Issue.record("Unsupported lifetime fixture")
+        }
     }
 
     private func makeContainer(

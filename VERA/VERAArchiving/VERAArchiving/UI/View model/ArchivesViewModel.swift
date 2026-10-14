@@ -39,6 +39,7 @@ public final class ArchivesViewModel {
         archiveObservation = nil
         let requestID = UUID()
         loadRequestID = requestID
+        error = nil
         let publisher = await archivesRepository.getArchives(sessionKey: sessionKeyProvider.sessionKey)
         guard loadRequestID == requestID else { return }
         archiveObservation =

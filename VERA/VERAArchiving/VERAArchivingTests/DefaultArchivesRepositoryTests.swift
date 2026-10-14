@@ -5,8 +5,9 @@
 import Combine
 import Foundation
 import Testing
-import VERAArchiving
 import VERADomain
+
+@testable import VERAArchiving
 
 @Suite("Default archives repository tests")
 struct DefaultArchivesRepositoryTests {
@@ -448,3 +449,58 @@ private actor SequencedArchivesDataSource: ArchivesDataSource {
 }
 
 private struct TimeoutError: Error {}
+
+@Suite("Archive polling generation ownership")
+struct ArchivePollingGenerationTests {
+    @Test func staleFailureCannotCompleteOrEvictReplacementPublisher() {
+        let state = DefaultArchivesRepository.State()
+        let old = state.beginPolling(for: "room")
+        let replacement = state.beginPolling(for: "room")
+        var failures = 0
+        let observation = replacement.publisher.sink(
+            receiveCompletion: { _ in failures += 1 }, receiveValue: { _ in })
+        defer { observation.cancel() }
+
+        // The old request passed its cancellation check before replacement began.
+        if state.takeFailedPolling(for: "room", generation: old.generation, publisher: old.publisher) {
+            old.publisher.send(completion: .failure(TimeoutError()))
+        }
+
+        #expect(failures == 0)
+        #expect(state.isCurrent(for: "room", generation: replacement.generation))
+        #expect(state.beginPolling(for: "room").publisher === replacement.publisher)
+    }
+
+    @Test func staleTaskInstallationIsCancelledWithoutDisplacingReplacement() async {
+        let state = DefaultArchivesRepository.State()
+        let old = state.beginPolling(for: "room")
+        let replacement = state.beginPolling(for: "room")
+        let staleTask = Task<Void, Never> {}
+        let currentTask = Task<Void, Never> {}
+        state.installTask(currentTask, for: "room", generation: replacement.generation)
+        state.installTask(staleTask, for: "room", generation: old.generation)
+        state.finishPolling(for: "room", generation: old.generation)
+
+        #expect(staleTask.isCancelled)
+        #expect(!currentTask.isCancelled)
+        #expect(state.beginPolling(for: "room").previousTask == currentTask)
+        await staleTask.value
+        await currentTask.value
+    }
+
+    @Test func currentFailureEvictsBeforeCompletionAllowsReentrantRetry() {
+        let state = DefaultArchivesRepository.State()
+        let failed = state.beginPolling(for: "room")
+        var retry: DefaultArchivesRepository.State.Registration?
+        let observation = failed.publisher.sink(
+            receiveCompletion: { _ in retry = state.beginPolling(for: "room") }, receiveValue: { _ in })
+        defer { observation.cancel() }
+
+        let claimed = state.takeFailedPolling(for: "room", generation: failed.generation, publisher: failed.publisher)
+        #expect(claimed)
+        if claimed { failed.publisher.send(completion: .failure(TimeoutError())) }
+        #expect(retry != nil)
+        #expect(retry?.publisher !== failed.publisher)
+        #expect(retry.map { state.isCurrent(for: "room", generation: $0.generation) } == true)
+    }
+}

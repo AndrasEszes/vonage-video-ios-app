@@ -301,6 +301,24 @@ struct ArchivesViewModelTests {
         #expect(repository.activeSubscriptions == 0)
     }
 
+    @Test func retryClearsAnObservedErrorAndKeepsSuccessfulResultErrorFree() async throws {
+        let repository = SpyArchivesRepository()
+        repository.shouldFail = true
+        let sut = makeSUT(archivesRepository: repository)
+        await sut.loadData()
+        let failure = await poll(read: { await MainActor.run { sut.error } }) { $0 != nil }
+        _ = try #require(failure)
+
+        repository.shouldFail = false
+        await sut.loadData()
+        #expect(await MainActor.run { sut.error == nil })
+        let expected = makeArchives()
+        repository.subject.send(expected)
+        let archives = await poll(read: { await MainActor.run { sut.archives } }) { !$0.isEmpty }
+        #expect(archives.map(\.id) == expected.reversed().map(\.id))
+        #expect(await MainActor.run { sut.error == nil })
+    }
+
     // MARK: - Test Helpers
 
     private func makeSUT(

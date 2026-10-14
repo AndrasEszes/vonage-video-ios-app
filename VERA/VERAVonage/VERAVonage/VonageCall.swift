@@ -156,10 +156,10 @@ public final class VonageCall: CallFacade {
     /// The participant representation of the local publisher, set after publishing.
     public var publisherParticipant: Participant?
 
-    /// Repository used to recreate the publisher with new settings during ``applyPublisherAdvancedSettings(_:)``.
     @MainActor private var publisherSettingsOperation: Task<Void, Error>?
     @MainActor private var publisherSettingsOperationID: UUID?
 
+    /// Repository used to recreate the publisher with new settings during ``applyPublisherAdvancedSettings(_:)``.
     private let publisherRepository: PublisherRepository
 
     private let subscriberFactory: VonageSubscriberFactory
@@ -170,6 +170,9 @@ public final class VonageCall: CallFacade {
 
     /// Test seam used to resolve a participant stream without changing the public initializer.
     var participantStreamResolver: ((String) async -> OTStream?)?
+
+    /// Test seam for pausing the replacement after unpublish; production yields to the run loop.
+    @MainActor var publisherReplacementSuspension: () async -> Void = { await Task.yield() }
 
     /// The collection of plugins extending call functionality (e.g., chat, CallKit, recording).
     ///
@@ -814,7 +817,7 @@ public final class VonageCall: CallFacade {
         publisher.cleanUp()
 
         // Yield so the run loop can process the unpublish event before OTPublisher init.
-        await Task.yield()
+        await publisherReplacementSuspension()
 
         // Once unpublish starts, finish restoring a valid publisher even if the settings task
         // is cancelled. A call that has ended must never create or publish new media.

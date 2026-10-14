@@ -614,6 +614,74 @@ struct PublisherReplacementCancellationTests {
         #expect(repository.recreatePublisherCallCount == 2)
         try await call.disconnect()
     }
+    @Test func cancellationAfterUnpublishFinishesRestoringPublisher() async throws {
+        let session = PublisherReplacementCancellationTestsSession()
+        let repository = MockPublisherRepository()
+        let original = VonagePublisherSpy()
+        original.publishAudio = false
+        original.publishVideo = true
+        let replacement = VonagePublisherSpy()
+        repository.publisherToReturn = replacement
+        let call = VonageCall(
+            roomName: makeMockCredentials().roomName,
+            makeSession: { _ in session }, publisher: original,
+            publisherRepository: repository, statsCollector: MockStatsCollector())
+        let gate = PublisherReplacementGate()
+        call.publisherReplacementSuspension = { await gate.pause() }
+        call.setup()
+        try await call.connect()
+        session.onSessionDidConnect?()
+
+        let task = Task { @MainActor in
+            try await call.applyPublisherAdvancedSettings(.init(videoResolution: .high))
+        }
+        await gate.waitUntilPaused()
+        #expect(session.unpublished == [ObjectIdentifier(original)])
+        #expect(repository.recreatePublisherCallCount == 0)
+        task.cancel()
+        gate.resume()
+        try await task.value
+
+        #expect(task.isCancelled)
+        #expect(repository.recreatePublisherCallCount == 1)
+        #expect(repository.recordedSettings.first?.publishAudio == false)
+        #expect(repository.recordedSettings.first?.publishVideo == true)
+        #expect(call.publisher === replacement)
+        #expect(session.published.last == ObjectIdentifier(replacement))
+        try await call.disconnect()
+    }
+
+    @Test func disconnectAfterUnpublishPreventsReplacementAndPublishing() async throws {
+        let session = PublisherReplacementCancellationTestsSession()
+        let repository = MockPublisherRepository()
+        repository.publisherToReturn = VonagePublisherSpy()
+        let original = VonagePublisherSpy()
+        let call = VonageCall(
+            roomName: makeMockCredentials().roomName,
+            makeSession: { _ in session }, publisher: original,
+            publisherRepository: repository, statsCollector: MockStatsCollector())
+        let gate = PublisherReplacementGate()
+        call.publisherReplacementSuspension = { await gate.pause() }
+        call.setup()
+        try await call.connect()
+        session.onSessionDidConnect?()
+
+        let task = Task { @MainActor in
+            try await call.applyPublisherAdvancedSettings(.init(videoResolution: .high))
+        }
+        await gate.waitUntilPaused()
+        #expect(session.unpublished == [ObjectIdentifier(original)])
+        let publishedBeforeDisconnect = session.published
+        try await call.disconnect()
+        gate.resume()
+        try await task.value
+
+        #expect(repository.recreatePublisherCallCount == 0)
+        #expect(session.published == publishedBeforeDisconnect)
+        #expect(session.disconnectCount == 1)
+        #expect(call.publisher === original)
+    }
+
     @Test func failedReplacementPreventsQueuedWorkFromUnpublishingDestroyedPublisher() async throws {
         let session = PublisherReplacementCancellationTestsSession()
         let repository = FailingReplacementRepository()
@@ -642,6 +710,7 @@ struct PublisherReplacementCancellationTests {
 private final class PublisherReplacementCancellationTestsSession: VonageSession {
     var disconnectCount = 0
     var unpublished: [ObjectIdentifier] = []
+    var published: [ObjectIdentifier] = []
     init() {
         super.init(
             session: OTSession(applicationId: "applicationId", sessionId: "sessionId", delegate: nil)!,
@@ -649,7 +718,7 @@ private final class PublisherReplacementCancellationTestsSession: VonageSession 
     }
     override func connect() throws {}
     override func disconnect() throws { disconnectCount += 1 }
-    override func publish(publisher: VonagePublisher) throws {}
+    override func publish(publisher: VonagePublisher) throws { published.append(ObjectIdentifier(publisher)) }
     override func unpublish(publisher: VonagePublisher) throws { unpublished.append(ObjectIdentifier(publisher)) }
 }
 
@@ -662,4 +731,30 @@ private final class FailingReplacementRepository: PublisherRepository {
     }
     func getPublisher() -> any VERAPublisher { VonagePublisherSpy() }
     func resetPublisher() {}
+}
+
+@MainActor
+private final class PublisherReplacementGate {
+    private var paused = false
+    private var continuation: CheckedContinuation<Void, Never>?
+    private var waiter: CheckedContinuation<Void, Never>?
+
+    func pause() async {
+        await withCheckedContinuation { continuation in
+            self.continuation = continuation
+            paused = true
+            waiter?.resume()
+            waiter = nil
+        }
+    }
+
+    func waitUntilPaused() async {
+        if paused { return }
+        await withCheckedContinuation { waiter = $0 }
+    }
+
+    func resume() {
+        continuation?.resume()
+        continuation = nil
+    }
 }

@@ -240,7 +240,7 @@ struct ParticipantVideoCardOverlays: View {
                             height: ParticipantVideoCardConstants.indicatorSize)
                 }
                 Spacer()
-                if isLocal {
+                if isLocal && isMicEnabled {
                     ZStack {
                         AudioLevelIndicatorView(
                             audioLevel: audioLevel,
@@ -252,6 +252,9 @@ struct ParticipantVideoCardOverlays: View {
                     )
                     .accessibilityElement(children: .contain)
                 } else {
+                    // Matches VERA Web: a muted local tile shows the same muted-mic
+                    // indicator as remote tiles. `onForceMute` is nil for the local
+                    // participant, and a muted mic never exposes force-mute anyway.
                     MicIndicator(
                         participantID: participantID,
                         isMicEnabled: isMicEnabled,

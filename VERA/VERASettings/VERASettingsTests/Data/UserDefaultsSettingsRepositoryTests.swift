@@ -75,8 +75,8 @@ struct PublisherSettingsRepositoryDefaultUpdateTests {
 struct UserDefaultsSettingsRepositoryTests {
     @Test("Noise suppression and separate content hints persist across restart and reset")
     func audioAndContentHintsPersist() async throws {
-        let defaults = UserDefaults.ephemeral()
-        let repository = UserDefaultsSettingsRepository(userDefaults: defaults)
+        let suiteName = UserDefaults.ephemeralSuiteName()
+        let repository = UserDefaultsSettingsRepository(userDefaults: .suite(suiteName))
         var preferences = PublisherSettingsPreferences.default
         preferences.videoResolution = .medium
         preferences.advancedNoiseSuppressionEnabled = true
@@ -90,7 +90,7 @@ struct UserDefaultsSettingsRepositoryTests {
         preferences.screenShareMaxVideoBitrate = 2_000_000
         preferences.scalableScreenshareEnabled = true
         await repository.save(preferences)
-        let reloaded = UserDefaultsSettingsRepository(userDefaults: defaults)
+        let reloaded = UserDefaultsSettingsRepository(userDefaults: .suite(suiteName))
         let restored = await reloaded.getPreferences()
         #expect(restored == preferences)
         #expect(restored.toPublisherAdvancedSettings().advancedNoiseSuppressionEnabled == true)
@@ -148,13 +148,13 @@ struct UserDefaultsSettingsRepositoryTests {
 
     @Test("Self-view mirror preference survives relaunch and reset")
     func selfViewMirrorPersistsAndResets() async throws {
-        let userDefaults = UserDefaults.ephemeral()
-        let repository = UserDefaultsSettingsRepository(userDefaults: userDefaults)
+        let suiteName = UserDefaults.ephemeralSuiteName()
+        let repository = UserDefaultsSettingsRepository(userDefaults: .suite(suiteName))
         var preferences = PublisherSettingsPreferences.default
         preferences.selfViewMirroringEnabled = false
         await repository.save(preferences)
 
-        let reloaded = UserDefaultsSettingsRepository(userDefaults: userDefaults)
+        let reloaded = UserDefaultsSettingsRepository(userDefaults: .suite(suiteName))
         let restored = await reloaded.getPreferences()
         #expect(!restored.selfViewMirroringEnabled)
         #expect(restored.toPublisherAdvancedSettings().selfViewMirroringEnabled == false)
@@ -185,13 +185,13 @@ struct UserDefaultsSettingsRepositoryTests {
 
     @Test("Camera choice survives a new repository and camera updates retain other preferences")
     func cameraChoicePersists() async throws {
-        let userDefaults = UserDefaults.ephemeral()
-        let repository = UserDefaultsSettingsRepository(userDefaults: userDefaults)
+        let suiteName = UserDefaults.ephemeralSuiteName()
+        let repository = UserDefaultsSettingsRepository(userDefaults: .suite(suiteName))
         var preferences = PublisherSettingsPreferences(videoResolution: .high, videoFrameRate: .fps15)
         preferences.selfViewMirroringEnabled = false
         await repository.save(preferences)
         await repository.saveCameraPosition(.back)
-        let reloaded = UserDefaultsSettingsRepository(userDefaults: userDefaults)
+        let reloaded = UserDefaultsSettingsRepository(userDefaults: .suite(suiteName))
         let restored = await reloaded.getPreferences()
         #expect(restored.cameraPosition == .back)
         #expect(restored.toPublisherAdvancedSettings().cameraPosition == .back)
@@ -248,13 +248,13 @@ struct UserDefaultsSettingsRepositoryTests {
 
     @Test("Persisted preferences are published before setup")
     func persistedPreferencesArePublishedBeforeSetup() async {
-        let userDefaults = UserDefaults.ephemeral()
+        let suiteName = UserDefaults.ephemeralSuiteName()
         var persistedPreferences = PublisherSettingsPreferences.default
         persistedPreferences.screenShareContentHint = .text
-        let sourceRepository = UserDefaultsSettingsRepository(userDefaults: userDefaults)
+        let sourceRepository = UserDefaultsSettingsRepository(userDefaults: .suite(suiteName))
         await sourceRepository.save(persistedPreferences)
 
-        let repository = UserDefaultsSettingsRepository(userDefaults: userDefaults)
+        let repository = UserDefaultsSettingsRepository(userDefaults: .suite(suiteName))
         var receivedPreferences: [PublisherSettingsPreferences] = []
         let cancellable = repository.preferencesPublisher.sink { receivedPreferences.append($0) }
 
@@ -676,5 +676,15 @@ extension UserDefaults {
         let defaults = UserDefaults(suiteName: suiteName)!
         defaults.removePersistentDomain(forName: suiteName)
         return defaults
+    }
+
+    /// A unique suite for tests that reopen the same store. Open it once per repository with
+    /// `suite(_:)` so each repository actor owns its own non-Sendable `UserDefaults` instance.
+    static func ephemeralSuiteName() -> String {
+        "com.vonage.vera.tests.\(UUID().uuidString)"
+    }
+
+    static func suite(_ name: String) -> UserDefaults {
+        UserDefaults(suiteName: name)!
     }
 }

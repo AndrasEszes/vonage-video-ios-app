@@ -82,10 +82,11 @@ struct TokenInjectingHTTPClientTests {
     // MARK: - Helpers
 
     private func makeSUT(
-        wrapped: HTTPClientSpy = HTTPClientSpy(),
+        wrapped: HTTPClientSpy? = nil,
         tokenProvider: TokenProvider = MockTokenProvider(token: nil)
     ) -> TokenInjectingHTTPClient {
-        TokenInjectingHTTPClient(wrapped: wrapped, tokenProvider: tokenProvider)
+        let wrapped = wrapped ?? HTTPClientSpy()
+        return TokenInjectingHTTPClient(wrapped: wrapped, tokenProvider: tokenProvider)
     }
 
     private func anyURL() -> URL {

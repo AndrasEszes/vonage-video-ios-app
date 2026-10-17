@@ -110,7 +110,7 @@ public final class MockHTTPClient: HTTPClient {
                 state.recordedData = data
                 state.recordedDataSequence.append(data)
             }
-            additionalHeaders.forEach { key, value in
+            for (key, value) in additionalHeaders {
                 state.recordedHeaders = [key: value]
             }
             let shouldThrow = state.shouldThrowError || state.shouldThrowErrorOnCallNumber == state.callCount

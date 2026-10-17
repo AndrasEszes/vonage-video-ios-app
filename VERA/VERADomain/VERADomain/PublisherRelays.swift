@@ -8,17 +8,17 @@ import Combine
 /// while downstream code runs. Subscribers choose their own delivery scheduler
 /// and must protect any mutable state captured by their closures.
 ///
-/// The unchecked conformance applies only to the encapsulated legacy subject:
+/// The unchecked conformance covers the encapsulated legacy subject and its
+/// immutable, type-erased publisher view:
 /// https://forums.swift.org/t/thread-safety-for-combine-publishers/29491/13
 public final class CurrentValueRelay<Output: Sendable, Failure: Error>: @unchecked Sendable {
     private let subject: CurrentValueSubject<Output, Failure>
+    public let publisher: AnyPublisher<Output, Failure>
 
     public init(_ value: Output) {
-        subject = CurrentValueSubject(value)
-    }
-
-    public var publisher: AnyPublisher<Output, Failure> {
-        subject.eraseToAnyPublisher()
+        let subject = CurrentValueSubject<Output, Failure>(value)
+        self.subject = subject
+        publisher = subject.eraseToAnyPublisher()
     }
 
     public var value: Output { subject.value }
@@ -34,12 +34,13 @@ public final class CurrentValueRelay<Output: Sendable, Failure: Error>: @uncheck
 
 /// A non-replaying event relay with the same synchronization contract as CurrentValueRelay.
 public final class EventRelay<Output: Sendable, Failure: Error>: @unchecked Sendable {
-    private let subject = PassthroughSubject<Output, Failure>()
+    private let subject: PassthroughSubject<Output, Failure>
+    public let publisher: AnyPublisher<Output, Failure>
 
-    public init() {}
-
-    public var publisher: AnyPublisher<Output, Failure> {
-        subject.eraseToAnyPublisher()
+    public init() {
+        let subject = PassthroughSubject<Output, Failure>()
+        self.subject = subject
+        publisher = subject.eraseToAnyPublisher()
     }
 
     public func send(_ value: Output) {

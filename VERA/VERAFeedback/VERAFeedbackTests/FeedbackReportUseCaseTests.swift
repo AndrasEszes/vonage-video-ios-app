@@ -7,6 +7,7 @@ import Testing
 
 @testable import VERAFeedback
 
+@MainActor
 @Suite("Feedback report use case tests")
 struct FeedbackReportUseCaseTests {
 

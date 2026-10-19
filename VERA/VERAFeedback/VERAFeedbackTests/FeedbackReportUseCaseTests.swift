@@ -74,8 +74,10 @@ struct FeedbackReportUseCaseTests {
     // MARK: - Test Helpers
 
     private func makeSUT(
-        feedbackReportDataSource: any FeedbackReportDataSource = MockFeedbackReportDataSource()
+        feedbackReportDataSource: (any FeedbackReportDataSource)? = nil
     ) -> FeedbackReportUseCase {
-        DefaultFeedbackReportUseCase(feedbackReportDataSource: feedbackReportDataSource)
+        DefaultFeedbackReportUseCase(
+            feedbackReportDataSource: feedbackReportDataSource ?? MockFeedbackReportDataSource()
+        )
     }
 }

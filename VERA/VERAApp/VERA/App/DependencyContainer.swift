@@ -158,8 +158,10 @@ final class DependencyContainer {
     lazy var goodByePageFactory = GoodByePageFactory(userRepository: userRepository)
 
     #if AUDIODIAGNOSTICS_ENABLED
+        @MainActor
         lazy var speakerTestService: SpeakerTestService = DefaultSpeakerTestService()
 
+        @MainActor
         lazy var audioDiagnosticsFactory = AudioDiagnosticsFactory(speakerTestService: speakerTestService)
     #endif
 
@@ -195,6 +197,7 @@ final class DependencyContainer {
     #if ARCHIVING_ENABLED
         lazy var archivingStatusDataSource = DefaultArchivingStatusDataSource()
 
+        @MainActor
         lazy var archivingFactory = ArchivingFactory(
             archivesRepository: archivesRepository,
             archivingDataSource: archivingDataSource,
@@ -205,6 +208,7 @@ final class DependencyContainer {
             baseURL: baseURL,
             httpClient: httpClient)
 
+        @MainActor
         lazy var archivesRepository: ArchivesRepository = {
             DefaultArchivesRepository(archivesDataSource: archivesDataSource)
         }()

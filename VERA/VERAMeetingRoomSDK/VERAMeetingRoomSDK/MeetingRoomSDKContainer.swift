@@ -205,6 +205,7 @@ final class MeetingRoomSDKContainer {
     lazy var sendChatMessageUseCase: SendChatMessageUseCase =
         VonageSendChatMessageUseCase(vonageChatPlugin: vonageChatPlugin)
 
+    @MainActor
     lazy var chatBadgeButtonViewModel = ChatBadgeButtonViewModel(
         chatMessagesObserver: chatMessagesRepository)
 
@@ -233,10 +234,12 @@ final class MeetingRoomSDKContainer {
         httpClient: httpClient,
         jsonDecoder: jsonDecoder)
 
+    @MainActor
     lazy var archivesRepository: any ArchivesRepository = {
         DefaultArchivesRepository(archivesDataSource: archivesDataSource)
     }()
 
+    @MainActor
     lazy var archivingFactory = ArchivingFactory(
         archivesRepository: archivesRepository,
         archivingDataSource: archivingDataSource,
@@ -346,8 +349,10 @@ final class MeetingRoomSDKContainer {
         settingsRepository: settingsRepository,
         statsWriter: statsRepository)
 
+    @MainActor
     lazy var defaultSpeakerTestService = DefaultSpeakerTestService()
 
+    @MainActor
     lazy var audioDiagnosticsFactory = AudioDiagnosticsFactory(
         speakerTestService: defaultSpeakerTestService
     )
@@ -357,6 +362,7 @@ final class MeetingRoomSDKContainer {
         statsDataSource: statsRepository
     )
 
+    @MainActor
     lazy var feedbackFactory = FeedbackFactory(
         baseURL: baseURL,
         httpClient: httpClient

@@ -30,7 +30,7 @@ final class PictureInPictureControllerLifecycle {
     }
 
     func receive(_ event: PictureInPictureControllerEvent, controllerID: ObjectIdentifier) {
-        guard self.controllerID == controllerID else { return }
+        guard let activeControllerID = self.controllerID, activeControllerID == controllerID else { return }
         let deliveryGeneration = generation
         switch event {
         case .possibleChanged: onPossibleDidChange?()

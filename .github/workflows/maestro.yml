@@ -2,7 +2,7 @@ name: Maestro UI Tests
 
 on:
   pull_request:
-    branches: [develop, main]
+    branches: [develop, main, 'czoli1976/VIDSOL-000-swift6-stack-*' ]
     paths:
       - 'VERA/**'
   push:

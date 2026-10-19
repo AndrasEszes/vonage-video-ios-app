@@ -18,6 +18,19 @@ jobs:
         run: |
           set -e
                   
+          # Explicitly authorized Swift 6 review stack. Other branch rules stay below.
+          case "$HEAD_BRANCH" in
+            "czoli1976/VIDSOL-000-swift6-stack-compatibility") STACK_BASE="czoli1976/VIDSOL-000-swift6-stack-foundation" ;;
+            "czoli1976/VIDSOL-000-swift6-stack-ownership") STACK_BASE="czoli1976/VIDSOL-000-swift6-stack-compatibility" ;;
+            "czoli1976/VIDSOL-000-swift6-stack-authentication") STACK_BASE="czoli1976/VIDSOL-000-swift6-stack-ownership" ;;
+            "czoli1976/VIDSOL-000-swift6-stack-activation") STACK_BASE="czoli1976/VIDSOL-000-swift6-stack-authentication" ;;
+            *) STACK_BASE="" ;;
+          esac
+          if [[ -n "$STACK_BASE" && "$BASE_BRANCH" == "$STACK_BASE" ]]; then
+            echo "Recognized Swift 6 review stack: $HEAD_BRANCH -> $BASE_BRANCH"
+            exit 0
+          fi
+
           # Check if head branch starts with 'release-'
           if [[ "$HEAD_BRANCH" == release-* ]]; then
             echo "Release branch detected: $HEAD_BRANCH"

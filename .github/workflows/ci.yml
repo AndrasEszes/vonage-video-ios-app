@@ -10,7 +10,7 @@ on:
     paths:
       - 'VERA/**'
   pull_request:
-    branches: [ main, develop ]
+    branches: [ main, develop , 'czoli1976/VIDSOL-000-swift6-stack-*' ]
     paths:
       - 'VERA/**'
 

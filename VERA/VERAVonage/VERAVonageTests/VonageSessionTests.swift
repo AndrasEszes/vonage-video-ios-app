@@ -2,6 +2,7 @@
 //  Created by Vonage on 24/9/26.
 //
 
+import Foundation
 import OpenTok
 import Testing
 import VERADomain
@@ -10,6 +11,25 @@ import VERADomain
 
 @Suite("VonageSession tests")
 struct VonageSessionTests {
+
+    @Test("Wrapping an injected session normalizes delegate delivery to the main queue")
+    func injectedSessionUsesMainCallbackQueue() {
+        let session = makeOTSession()
+        session.apiQueue = DispatchQueue(label: "vera.session.injected-callbacks")
+        let sut = VonageSession(
+            session: session,
+            credentials: RoomCredentials(
+                sessionId: "sessionId",
+                token: "token",
+                applicationId: "applicationId",
+                roomName: "heart-of-gold",
+                sessionKey: "sessionKey"
+            )
+        )
+
+        #expect(session.apiQueue === DispatchQueue.main)
+        withExtendedLifetime(sut) {}
+    }
 
     // MARK: - Metadata
 

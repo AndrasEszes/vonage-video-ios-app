@@ -20,6 +20,7 @@ import VERAVonage
 ///
 /// - Important: Set `channel` before sending messages; otherwise throws ``VonageChatPlugin/Error/missingChannel``.
 /// - SeeAlso: ``VonagePlugin``, ``VonageSignalHandler``, ``VonageSignalEmitter``, ``VonageSignal``, ``OutgoingSignal``
+@MainActor
 public final class VonageChatPlugin: VonagePlugin, VonageSignalHandler, VonageSignalEmitter {
 
     private static let logger = Logger(subsystem: "com.vonage.vera", category: "Chat")

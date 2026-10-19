@@ -56,6 +56,33 @@ struct MainActorEventQueueTests {
         #expect(received == [0])
     }
 
+    @Test("A busy UI coalesces display delivery after processing every audio sample")
+    func audioSmoothingPrecedesCoalescing() async {
+        let queue = MainActorEventQueue<Float>(transformEvent: Self.makeAudioTransform())
+        let levels: [Float] = [1, 0.5, 0.25, 0.1]
+        let reference = MovingAvgAudioLevelTracker()
+        let expected = levels.map { reference.track($0).logMovingAvg }.last!
+        var received: [Float] = []
+        let produced = DispatchSemaphore(value: 0)
+
+        await withCheckedContinuation { continuation in
+            queue.setHandler { value in
+                received.append(value)
+                continuation.resume()
+            }
+            DispatchQueue.global().async {
+                for level in levels { queue.send(level, replacing: "audio") }
+                produced.signal()
+            }
+            // Hold UI delivery briefly until this bounded background burst is queued.
+            #expect(produced.wait(timeout: .now() + 2) == .success)
+        }
+
+        #expect(received.count == 1)
+        #expect(received.first == expected)
+        #expect(expected != MovingAvgAudioLevelTracker().track(levels.last!).logMovingAvg)
+    }
+
     @Test("A sustained control burst yields to other UI work after a bounded batch")
     func controlBurstYieldsBetweenBatches() async {
         let queue = MainActorEventQueue<Int>()
@@ -105,4 +132,9 @@ struct MainActorEventQueueTests {
         #expect(newValues == [1000])
     }
 
+    // The queue invokes this lock-confined transformation on producer threads.
+    nonisolated private static func makeAudioTransform() -> (Float) -> Float {
+        let tracker = MovingAvgAudioLevelTracker()
+        return { tracker.track($0).logMovingAvg }
+    }
 }

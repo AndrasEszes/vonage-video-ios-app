@@ -7,17 +7,19 @@ import Foundation
 import VERADomain
 
 public final class DefaultArchivingStatusDataSource: ArchivingStatusDataSource {
-    private var _archivingState = CurrentValueSubject<ArchivingState, Never>(.idle)
-    public lazy var archivingState: AnyPublisher<ArchivingState, Never> = _archivingState.eraseToAnyPublisher()
+    private let _archivingState = CurrentValueRelay<ArchivingState, Never>(.idle)
+    public var archivingState: AnyPublisher<ArchivingState, Never> {
+        _archivingState.publisher
+    }
 
     public init() {
     }
 
     public func set(archivingState: ArchivingState) {
-        _archivingState.value = archivingState
+        _archivingState.send(archivingState)
     }
 
     public func reset() {
-        _archivingState.value = .idle
+        _archivingState.send(.idle)
     }
 }

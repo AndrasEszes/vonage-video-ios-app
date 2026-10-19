@@ -9,6 +9,7 @@ import VERADomain
 
 @testable import VERAVonageSettingsPlugin
 
+@MainActor
 @Suite("NetworkStatsCollector Tests")
 struct NetworkStatsCollectorTests {
 

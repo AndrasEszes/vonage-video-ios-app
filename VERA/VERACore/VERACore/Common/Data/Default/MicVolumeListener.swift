@@ -4,25 +4,33 @@
 
 import AVFoundation
 import Combine
+import VERADomain
 import os
 
 /// Utility class to listen directly to the device microphone volume.
 /// Used in the waiting room to show the volume indicator;
 /// in the conference room, the SDK's audio-level listener is used instead.
+@MainActor
 final class MicVolumeListener {
 
     private static let logger = Logger(
         subsystem: Bundle.main.bundleIdentifier ?? "com.vonage", category: "MicVolumeListener")
-    private static let scale: Float = 10
+    nonisolated private static let scale: Float = 10
 
     private let audioEngine = AVAudioEngine()
-    private var volumeSubject = PassthroughSubject<Float, Never>()
+    private var isListening = false
+    private var volumeRelay = EventRelay<Float, Never>()
 
     /// Starts listening to microphone volume and emits normalized audio levels (0.0–1.0).
     ///
     /// - Parameter samplingInterval: Minimum interval between volume samples (default 0.06s).
     /// - Returns: A publisher emitting normalized audio level values.
     func start(samplingInterval: TimeInterval = 0.06) -> AnyPublisher<Float, Never> {
+        guard !isListening else {
+            return volumeRelay.publisher
+                .throttle(for: .seconds(samplingInterval), scheduler: DispatchQueue.main, latest: true)
+                .eraseToAnyPublisher()
+        }
         let inputNode = audioEngine.inputNode
         let format = inputNode.outputFormat(forBus: 0)
 
@@ -31,17 +39,20 @@ final class MicVolumeListener {
                 "Invalid input format (sampleRate: \(format.sampleRate), channels: \(format.channelCount)). Microphone may be unavailable."
             )
             return
-                volumeSubject
+                volumeRelay.publisher
                 .throttle(for: .seconds(samplingInterval), scheduler: DispatchQueue.main, latest: true)
                 .eraseToAnyPublisher()
         }
 
-        inputNode.installTap(onBus: 0, bufferSize: 1024, format: format) { [weak self] buffer, _ in
-            guard let self else { return }
-            let rms = self.normalizeAudioLevel(buffer: buffer)
-            self.volumeSubject.send(min(max(rms, 0), 1))
+        // The real-time callback owns only the Sendable relay for this recording.
+        // A late callback after stop cannot reach this listener or a later recording.
+        let relay = volumeRelay
+        inputNode.installTap(onBus: 0, bufferSize: 1024, format: format) { @Sendable buffer, _ in
+            let rms = Self.normalizeAudioLevel(buffer: buffer)
+            relay.send(min(max(rms, 0), 1))
         }
 
+        isListening = true
         do {
             try audioEngine.start()
         } catch {
@@ -49,20 +60,22 @@ final class MicVolumeListener {
         }
 
         return
-            volumeSubject
+            volumeRelay.publisher
             .throttle(for: .seconds(samplingInterval), scheduler: DispatchQueue.main, latest: true)
             .eraseToAnyPublisher()
     }
 
     /// Stops listening to microphone volume.
     func stop() {
+        guard isListening else { return }
+        isListening = false
         audioEngine.inputNode.removeTap(onBus: 0)
         audioEngine.stop()
-        volumeSubject.send(completion: .finished)
-        volumeSubject = PassthroughSubject<Float, Never>()
+        volumeRelay.send(completion: .finished)
+        volumeRelay = EventRelay<Float, Never>()
     }
 
-    private func normalizeAudioLevel(buffer: AVAudioPCMBuffer) -> Float {
+    nonisolated private static func normalizeAudioLevel(buffer: AVAudioPCMBuffer) -> Float {
         guard let channelData = buffer.floatChannelData else { return 0 }
         let frameLength = Int(buffer.frameLength)
         guard frameLength > 0 else { return 0 }

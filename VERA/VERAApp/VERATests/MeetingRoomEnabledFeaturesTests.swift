@@ -16,6 +16,7 @@ import VERAConfiguration
 /// - Note: These tests run on the iOS destination, so `pictureInPicture` (gated by
 ///   `#if !os(macOS)`) and `screenShare` (gated by `!isiOSAppOnMac`) are expected to be
 ///   enabled when their flags are `true`.
+@MainActor
 @Suite("Meeting room enabled features")
 struct MeetingRoomEnabledFeaturesTests {
 
@@ -93,7 +94,7 @@ struct MeetingRoomEnabledFeaturesTests {
     // MARK: - One flag at a time
 
     /// Every toggleable meeting room flag, paired with the feature it should enable.
-    static let singleFeatureCases: [MeetingRoomFeature] =
+    nonisolated static let singleFeatureCases: [MeetingRoomFeature] =
         MeetingRoomFeature.allCases.filter { $0 != .callKit }
 
     @Test(

@@ -8,6 +8,29 @@ import Testing
 struct PictureInPictureControllerLifecycleTests {
     private struct StubError: Error {}
 
+    @Test("An unconfigured lifetime rejects every callback")
+    func unconfiguredLifetimeRejectsCallbacks() {
+        let lifecycle = PictureInPictureControllerLifecycle()
+        let controller = NSObject()
+        let id = ObjectIdentifier(controller)
+        var events: [String] = []
+        lifecycle.onStateDidStart = { events.append("start") }
+        lifecycle.onDidStartRendering = { events.append("render") }
+        lifecycle.onStateDidStop = { events.append("stop") }
+        lifecycle.onPossibleDidChange = { events.append("possible") }
+        lifecycle.onFailed = { _ in events.append("failed") }
+
+        lifecycle.receive(.willStart, controllerID: id)
+        lifecycle.receive(.didStart, controllerID: id)
+        lifecycle.receive(.didStop, controllerID: id)
+        lifecycle.receive(.possibleChanged, controllerID: id)
+        lifecycle.receive(.failed(StubError()), controllerID: id)
+
+        #expect(events.isEmpty)
+        #expect(!lifecycle.isInPictureInPicture)
+        withExtendedLifetime(controller) {}
+    }
+
     @Test("Routed lifecycle events preserve state and callback order")
     func delegateCallbacks() {
         let lifecycle = PictureInPictureControllerLifecycle()

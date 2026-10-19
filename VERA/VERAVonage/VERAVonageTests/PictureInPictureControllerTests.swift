@@ -15,7 +15,7 @@ struct PictureInPictureControllerTests {
 
     private struct StubError: Swift.Error {}
 
-    private func makeAVController() -> AVPictureInPictureController {
+    private func makeAVController() -> AVPictureInPictureController? {
         let contentViewController = AVPictureInPictureVideoCallViewController()
         let source = AVPictureInPictureController.ContentSource(
             activeVideoCallSourceView: UIView(),
@@ -90,10 +90,13 @@ struct PictureInPictureControllerTests {
         _ = sut.canStartPictureInPicture
     }
 
-    @Test("Callbacks from an unrelated controller cannot start or stop this lifetime")
-    func unrelatedControllerCallbacksAreIgnored() {
+    @Test(
+        "Callbacks from an unrelated controller cannot start or stop this lifetime",
+        .enabled(if: AVPictureInPictureController.isPictureInPictureSupported())
+    )
+    func unrelatedControllerCallbacksAreIgnored() throws {
         let sut = PictureInPictureController()
-        let controller = makeAVController()
+        let controller = try #require(makeAVController())
         var callbacks = 0
         sut.onPictureInPictureStateDidStart = { callbacks += 1 }
         sut.onPictureInPictureStateDidStop = { callbacks += 1 }

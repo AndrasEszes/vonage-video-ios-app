@@ -1,6 +1,6 @@
 # Call and participant ownership
 
-VERA separates UI-owned call controls and renderable participant state from immutable metadata and actor-managed storage. This source preparation retains Swift 5 language defaults. It does not enable Swift 6 for the whole application or establish support for older compilers.
+VERA separates UI-owned call controls and renderable participant state from immutable metadata and actor-managed storage. The final activation defaults owned targets to Swift 6 and retains Swift 5 language-mode validation on the supported compiler. See [migration and customer integration](SWIFT6_MIGRATION.md) for the activation prerequisites, build override and compiler limitations.
 
 ## Integrating call controls
 
@@ -49,7 +49,7 @@ Custom participant builders and UI actions must retain their declared actor owne
 
 ## Runtime boundaries and validation
 
-Session delegate delivery is configured before use. Publisher/subscriber adapters copy callback values into an ordered UI drain; high-frequency updates can be coalesced. Participant and statistics work retains lifetime guards and waits for admitted writes before removal or reset. Native video frames are handled synchronously within their borrowed lifetime.
+`VonageSessionFactory` configures native session delegate delivery on the main queue before wrapping the session and assigning its delegate. If you construct `VonageSession` directly, supply an unconnected `OTSession` already configured for main-queue callbacks and preserve that queue while wrapped. The wrapper initializer retains the supplied configuration. Publisher/subscriber adapters copy callback values into an ordered UI drain; high-frequency updates can be coalesced. Participant and statistics work retains lifetime guards and waits for admitted writes before removal or reset. Native video frames are handled synchronously within their borrowed lifetime.
 
 An app using Swift 6 mode can consume these explicit ownership contracts. An app remaining in Swift 5 mode can also consume them with a supported compiler, but custom implementations or synchronous callers may need actor annotations or explicit asynchronous hops. Language-mode compatibility is separate from support for an older Xcode/Swift compiler.
 

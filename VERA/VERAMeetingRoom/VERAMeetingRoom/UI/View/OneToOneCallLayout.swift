@@ -1,4 +1,5 @@
 import SwiftUI
+import VERACommonUI
 import VERADomain
 
 /// A camera-only pair. Screen shares and extra tiles keep the user's existing meeting layout.
@@ -94,7 +95,7 @@ struct OneToOneCallLayout: View {
                     .contentShape(Rectangle())
                     .position(center)
                     .trackingVisibility(of: participants.local)
-                    .accessibilityIdentifier("meeting-self-view-floating")
+                    .accessibilityAnchor("meeting-self-view-floating")
                     .accessibilityAction(named: Text("Move to top left", bundle: .module)) { move(to: .topLeft) }
                     .accessibilityAction(named: Text("Move to top right", bundle: .module)) { move(to: .topRight) }
                     .accessibilityAction(named: Text("Move to bottom left", bundle: .module)) { move(to: .bottomLeft) }

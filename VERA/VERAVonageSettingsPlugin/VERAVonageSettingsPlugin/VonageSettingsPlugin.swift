@@ -40,6 +40,7 @@ import VERAVonage
 /// ```
 ///
 /// - SeeAlso: ``VonagePlugin``, ``VonagePluginCallHolder``, ``StatsWriter``
+@MainActor
 public final class VonageSettingsPlugin: VonagePlugin, VonagePluginCallHolder {
 
     private var cancellables = Set<AnyCancellable>()

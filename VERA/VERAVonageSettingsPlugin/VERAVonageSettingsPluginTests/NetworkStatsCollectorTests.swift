@@ -759,6 +759,48 @@ struct NetworkStatsCollectorTests {
         cancellable.cancel()
     }
 
+    @Test(
+        "Publisher media-link callbacks map SDK transport conditions",
+        arguments: [
+            OTNetworkCondition.unknown, .critical, .warning, .fair, .good, .excellent,
+        ])
+    func publisherMediaLinkMapsTransport(condition: OTNetworkCondition) async {
+        let sut = NetworkStatsCollector()
+        let publisher = MockPublisher()
+        var snapshot: NetworkMediaStats = .empty
+        let observation = sut.statsPublisher.sink { snapshot = $0 }
+        let reasons: [OTNetworkReason] = [.none, .bandwidth, .packetLoss, .networkConditionChange]
+        let expectedConditions: [NetworkCondition] = [.unknown, .critical, .warning, .fair, .good, .excellent]
+        let expectedReasons: [NetworkConditionReason] = [.none, .bandwidth, .packetLoss, .networkConditionChange]
+
+        for (index, reason) in reasons.enumerated() {
+            let transport = OTTransportStats(
+                connectionEstimatedBandwidth: 750_000, networkCondition: condition, networkConditionReason: reason)
+            let stats = OTPublisherKitMediaLinkStats(
+                connectionId: "remote", subscriberId: "subscriber", transport: transport)
+            sut.publisher(publisher, mediaLinkStatsUpdated: [stats])
+            await delay()
+            #expect(snapshot.publisherMediaLinkStats?.transport.connectionEstimatedBandwidth == 750_000)
+            #expect(
+                snapshot.publisherMediaLinkStats?.transport.networkCondition
+                    == expectedConditions[Int(condition.rawValue)])
+            #expect(snapshot.publisherMediaLinkStats?.transport.networkConditionReason == expectedReasons[index])
+        }
+        withExtendedLifetime(observation) {}
+    }
+
+    @Test("Empty publisher media-link callback preserves the latest snapshot")
+    func emptyPublisherMediaLinkPreservesSnapshot() async {
+        let sut = NetworkStatsCollector()
+        let publisher = MockPublisher()
+        var emissions: [NetworkMediaStats] = []
+        let observation = sut.statsPublisher.sink { emissions.append($0) }
+        sut.publisher(publisher, mediaLinkStatsUpdated: [])
+        await delay()
+        #expect(emissions == [.empty])
+        withExtendedLifetime(observation) {}
+    }
+
     private func makeVideoLayer(
         width: Int32,
         height: Int32,

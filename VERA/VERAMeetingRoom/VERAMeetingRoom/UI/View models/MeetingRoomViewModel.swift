@@ -55,6 +55,9 @@ public final class MeetingRoomViewModel {
 
     // Kept per instance so bounded fallback behavior can be exercised without a global test clock.
     @ObservationIgnored var disconnectionTimeout: Duration = .seconds(6)
+    @ObservationIgnored var disconnectionDelay: @MainActor (Duration) async throws -> Void = {
+        try await Task.sleep(for: $0)
+    }
 
     @ObservationIgnored
     private var cancellables = Set<AnyCancellable>()
@@ -90,7 +93,7 @@ public final class MeetingRoomViewModel {
     @MainActor public var isArchiving = false
 
     /// Tracks the fallback disconnection task so it can be cancelled on normal call end.
-    @MainActor @ObservationIgnored private var disconnectionTask: Task<Void, Never>?
+    @MainActor @ObservationIgnored private(set) var disconnectionTask: Task<Void, Never>?
 
     @ObservationIgnored
     private let layoutPublisher = CurrentValueSubject<MeetingRoomLayout, Never>(.activeSpeaker)
@@ -516,9 +519,10 @@ extension MeetingRoomViewModel {
         guard !isTearingDown else { return }
         disconnectionTask?.cancel()
         let timeout = disconnectionTimeout
+        let delay = disconnectionDelay
         disconnectionTask = Task { [weak self] in
             do {
-                try await Task.sleep(for: timeout)
+                try await delay(timeout)
             } catch {
                 return  // Task was cancelled — normal call end already handled cleanup
             }

@@ -20,6 +20,22 @@ import VERAConfiguration
 @Suite("Meeting room enabled features")
 struct MeetingRoomEnabledFeaturesTests {
 
+    @Test("Mocked E2E calls omit native CallKit and preserve configured UI features")
+    func e2eCallsDoNotRegisterWithCallKit() {
+        let sut = makeContainer(audioDiagnostics: true, captions: true, chat: true)
+        #expect(
+            sut.meetingRoomFeatures(isE2EEnabled: true)
+                == sut.meetingRoomEnabledFeatures.subtracting([.callKit]))
+        #expect(sut.meetingRoomFeatures(isE2EEnabled: true).contains(.audioDiagnostics))
+    }
+
+    @Test("Normal calls retain native CallKit and all configured features")
+    func normalCallsKeepCallKit() {
+        let sut = makeContainer(captions: true, chat: true)
+        #expect(sut.meetingRoomFeatures(isE2EEnabled: false) == sut.meetingRoomEnabledFeatures)
+        #expect(sut.meetingRoomFeatures(isE2EEnabled: false).contains(.callKit))
+    }
+
     // MARK: - Full configurations
 
     @Test("All flags enabled activates every feature")

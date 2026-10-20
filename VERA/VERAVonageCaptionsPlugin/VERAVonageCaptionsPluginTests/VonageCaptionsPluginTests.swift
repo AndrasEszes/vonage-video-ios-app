@@ -481,8 +481,13 @@ private final class MockCallFacade: CallFacade {
     }
 
     let _captionsPublisher = EventRelay<[CaptionItem], Never>()
+    let captionSubscriptions = SubscriptionCounter()
+
     var captionsPublisher: AnyPublisher<[CaptionItem], Never> {
-        _captionsPublisher.publisher
+        _captionsPublisher.publisher.handleEvents(
+            receiveSubscription: { [captionSubscriptions] _ in captionSubscriptions.started() },
+            receiveCancel: { [captionSubscriptions] in captionSubscriptions.ended() }
+        ).eraseToAnyPublisher()
     }
 
     var recordedActions: [CallActions] = []

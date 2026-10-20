@@ -124,9 +124,15 @@ struct OneToOneCallLayout: View {
 #Preview {
     let local = UIParticipant(
         participant: Participant(
-            id: "local", name: "You", isMicEnabled: true, isCameraEnabled: true,
-            videoDimensions: CGSize(width: 480, height: 640), isRemote: false,
-            creationTime: .now, isScreenshare: false, view: AnyView(Color.blue)
+            id: "local",
+            name: "You",
+            isMicEnabled: true,
+            isCameraEnabled: true,
+            videoDimensions: CGSize(width: 480, height: 640),
+            isRemote: false,
+            creationTime: .now,
+            isScreenshare: false,
+            view: AnyView(Color.blue)
         ))
     MeetingRoomContent(
         participants: [local, PreviewData.uiSingleParticipant],

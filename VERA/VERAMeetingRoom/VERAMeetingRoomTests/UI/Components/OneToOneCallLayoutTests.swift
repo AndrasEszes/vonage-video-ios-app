@@ -73,7 +73,8 @@ struct OneToOneCallLayoutTests {
             let rect = CGRect(
                 x: center.x - geometry.tileSize.width / 2,
                 y: center.y - geometry.tileSize.height / 2,
-                width: geometry.tileSize.width, height: geometry.tileSize.height)
+                width: geometry.tileSize.width,
+                height: geometry.tileSize.height)
             #expect(rect.minX >= 0)
             #expect(rect.minY >= 0)
             #expect(rect.maxX <= container.width + 0.001)

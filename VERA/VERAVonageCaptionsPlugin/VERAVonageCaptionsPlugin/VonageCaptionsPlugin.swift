@@ -119,9 +119,15 @@ public final class VonageCaptionsPlugin: VonagePlugin, VonagePluginCallHolder {
         // Uses a stored Task with `for await` so that each write completes
         // before processing the next value, avoiding fire-and-forget races.
         if let publisher = call?.captionsPublisher {
+            // Subscribe before returning so an immediate caption update is buffered even
+            // when the forwarding task has not yet been scheduled.
+            let captions = AsyncStream<[CaptionItem]>.makeStream(bufferingPolicy: .bufferingNewest(1))
+            publisher
+                .sink { snapshot in captions.continuation.yield(snapshot) }
+                .store(in: &cancellables)
             captionsTask?.cancel()
             captionsTask = Task { [weak self] in
-                for await captions in publisher.values {
+                for await captions in captions.stream {
                     guard let self else { return }
                     await self.captionsRepository.updateCaptions(captions)
                 }

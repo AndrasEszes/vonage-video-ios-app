@@ -22,9 +22,18 @@ final class MicLevelPublisherDecorator: VERAPublisher {
         self.wrapped = publisher
     }
 
-    deinit {
-        micVolumeListener.stop()
-    }
+    #if compiler(>=6.2)
+        isolated deinit {
+            micVolumeListener.stop()
+        }
+    #else
+        deinit {
+            let listener = micVolumeListener
+            Task { @MainActor in
+                listener.stop()
+            }
+        }
+    #endif
 
     // MARK: - Audio level (overridden)
 

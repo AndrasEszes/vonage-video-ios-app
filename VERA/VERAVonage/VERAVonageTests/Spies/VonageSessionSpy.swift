@@ -43,7 +43,6 @@ class VonageSessionSpy: VonageSession {
 
     public override func disconnect() throws {
         disconnectCalled = true
-        onSessionDidDisconnect?()
     }
 
     public override func unpublish(publisher: VonagePublisher) throws {

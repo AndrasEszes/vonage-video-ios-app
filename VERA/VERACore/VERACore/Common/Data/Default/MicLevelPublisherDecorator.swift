@@ -12,6 +12,7 @@ import VERADomain
 /// Used in the waiting room where the Vonage session is not connected,
 /// so the SDK's audio-level delegate never fires.
 /// All other protocol members forward to the wrapped publisher.
+@MainActor
 final class MicLevelPublisherDecorator: VERAPublisher {
 
     private let wrapped: VERAPublisher

@@ -194,6 +194,13 @@ final class DependencyContainer {
         return features
     }
 
+    /// Mock calls must not register with native CallKit: simulator telephony can
+    /// terminate them asynchronously and take unrelated UI flows to the goodbye page.
+    func meetingRoomFeatures(isE2EEnabled: Bool) -> Set<MeetingRoomFeature> {
+        let features = meetingRoomEnabledFeatures
+        return isE2EEnabled ? features.subtracting([.callKit]) : features
+    }
+
     // MARK: - Archiving feature (goodbye page)
 
     #if ARCHIVING_ENABLED

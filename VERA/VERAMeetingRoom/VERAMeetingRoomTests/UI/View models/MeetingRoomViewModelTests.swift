@@ -1431,14 +1431,24 @@ struct MeetingRoomViewModelTests {
         let connect = makeMockConnectToRoomUseCase()
         let disconnect = makeMockDisconnectRoomUseCase()
         let sut = makeSUT(connectToRoomUseCase: connect, disconnectRoomUseCase: disconnect)
-        sut.disconnectionTimeout = .milliseconds(100)
+        let delay = ControlledDisconnectionDelay()
+        sut.disconnectionDelay = delay.sleep
+        defer { delay.advance() }
         await sut.loadUI()
         connect.call._eventsPublisher.send(.disconnected)
         _ = await waitForToast(sut) { $0?.mode == .failure }
+        let fallback = try #require(sut.disconnectionTask)
+        let started = await pollUI(read: { delay.isWaiting }, until: { $0 })
+        try #require(started)
+
         connect.call._callState.send(state)
         _ = try await waitForContentState(sut) { $0.callState == state }
+        #expect(fallback.isCancelled)
 
-        try await Task.sleep(for: .milliseconds(250))
+        // Release the suspended timer only after teardown has been delivered. Joining the
+        // actual fallback proves it cannot disconnect, regardless of CI scheduling speed.
+        delay.advance()
+        await fallback.value
         #expect(disconnect.recordedActions.isEmpty)
     }
 
@@ -1684,4 +1694,26 @@ extension MeetingRoomViewState {
 
 private enum MockForceMuteError: Swift.Error {
     case requestFailed
+}
+
+/// A manually released timer keeps cancellation tests independent of elapsed wall time.
+@MainActor
+private final class ControlledDisconnectionDelay {
+    private var continuation: CheckedContinuation<Void, Never>?
+    private var advanced = false
+    var isWaiting: Bool { continuation != nil }
+
+    func sleep(_ duration: Duration) async throws {
+        if !advanced {
+            await withCheckedContinuation { continuation = $0 }
+        }
+        try Task.checkCancellation()
+    }
+
+    func advance() {
+        advanced = true
+        let pending = continuation
+        continuation = nil
+        pending?.resume()
+    }
 }

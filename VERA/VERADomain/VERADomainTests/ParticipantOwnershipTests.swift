@@ -38,5 +38,8 @@ struct ParticipantOwnershipTests {
         #expect(appearances == 1)
         #expect(participant.withEmptyView == participant)
         #expect(participant.withEmptyView.onAppear == nil)
+        #expect(participant.containerAspectRatio == 16.0 / 9.0)
+        #expect(participant.aspectRatio == 16.0 / 9.0)
+        #expect(participant.description.contains("Alice"))
     }
 }

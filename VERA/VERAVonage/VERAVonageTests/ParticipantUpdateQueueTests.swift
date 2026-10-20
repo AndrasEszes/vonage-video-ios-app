@@ -25,6 +25,8 @@ struct ParticipantUpdateQueueTests {
             }
             actions.append("old:written")
         }
+        #expect(queue.contains(id: "remote", generation: oldGeneration))
+        #expect(!queue.contains(id: "unknown", generation: oldGeneration))
         queue.submit(participant(), generation: oldGeneration)
         await entered.wait()
         var replacementRegistered = false
@@ -40,10 +42,13 @@ struct ParticipantUpdateQueueTests {
         #expect(!replacementRegistered)
         await release.open()
         let newGeneration = await replacement.value
+        #expect(!queue.contains(id: "remote", generation: oldGeneration))
+        #expect(queue.contains(id: "remote", generation: newGeneration))
         queue.submit(participant(), generation: oldGeneration)
         queue.submit(participant(), generation: newGeneration)
         await replacementWritten.wait()
         await queue.stopAll()
+        #expect(!queue.contains(id: "remote", generation: newGeneration))
         #expect(actions == ["old:begin", "old:written", "new:written"])
     }
 

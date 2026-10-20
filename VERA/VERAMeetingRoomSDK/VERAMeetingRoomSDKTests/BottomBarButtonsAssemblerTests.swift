@@ -765,9 +765,10 @@ struct BottomBarButtonsAssemblerTests {
     // MARK: - Helpers
 
     /// Polls until `condition` becomes true or the timeout elapses.
+    @MainActor
     private func waitUntil(
         timeout: Duration = .seconds(2),
-        _ condition: @escaping () -> Bool
+        _ condition: @escaping @MainActor () -> Bool
     ) async {
         let deadline = ContinuousClock.now.advanced(by: timeout)
         while ContinuousClock.now < deadline {
@@ -776,6 +777,7 @@ struct BottomBarButtonsAssemblerTests {
         }
     }
 
+    @MainActor
     private func makeContainer(
         enabledFeatures: Set<MeetingRoomFeature>
     ) -> MeetingRoomSDKContainer {

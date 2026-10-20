@@ -105,6 +105,54 @@ struct VonageCaptionsPluginTests {
         #expect(mocks.repository.updateCallCount > countAfterFirst)
     }
 
+    @Test("Repeated starts retain exactly one captions and status subscription")
+    func repeatedStartsKeepOneSubscriptionPair() async throws {
+        let (sut, mocks) = makeSUT()
+        sut.call = mocks.call
+        for _ in 0..<3 { try await sut.callDidStart([:]) }
+
+        #expect(mocks.call.captionSubscriptions.activeCount == 1)
+        #expect(mocks.statusDataSource.subscriptions.activeCount == 1)
+        let captions = [CaptionItem(speakerName: "Alice", text: "Still listening")]
+        mocks.call._captionsPublisher.send(captions)
+        try await waitUntil { mocks.repository.lastCaptions == captions }
+
+        try await sut.callDidEnd()
+        #expect(mocks.call.captionSubscriptions.activeCount == 0)
+        #expect(mocks.statusDataSource.subscriptions.activeCount == 0)
+    }
+
+    @Test("A repeated start preserves a suspended caption write and its worker")
+    func repeatedStartWhileCaptionWriteIsSuspended() async throws {
+        let (_, mocks) = makeSUT()
+        let writer = SuspendedCaptionsWriter()
+        let sut = VonageCaptionsPlugin(
+            captionsStatusDataSource: mocks.statusDataSource, captionsRepository: writer)
+        sut.call = mocks.call
+        try await sut.callDidStart([:])
+        let first = [CaptionItem(speakerName: "Alice", text: "First")]
+        mocks.call._captionsPublisher.send(first)
+        await writer.waitForFirstWrite()
+
+        // Starting again must not create a second reader while the first write is suspended.
+        try await sut.callDidStart([:])
+        let captionsCount = mocks.call.captionSubscriptions.activeCount
+        let statusCount = mocks.statusDataSource.subscriptions.activeCount
+        let second = [CaptionItem(speakerName: "Bob", text: "Second")]
+        mocks.call._captionsPublisher.send(second)
+        await writer.resumeFirstWrite()
+        try await sut.callDidEnd()
+
+        #expect(captionsCount == 1)
+        #expect(statusCount == 1)
+        let updates = await writer.updates
+        #expect(updates.first == first)
+        #expect(updates.last == [])
+        #expect(await writer.maximumConcurrentWrites == 1)
+        #expect(mocks.call.captionSubscriptions.activeCount == 0)
+        #expect(mocks.statusDataSource.subscriptions.activeCount == 0)
+    }
+
     // MARK: - Call Did End
 
     @Test("callDidEnd resets captions status data source")
@@ -247,8 +295,13 @@ struct VonageCaptionsPluginTests {
 private final class SpyCaptionsStatusDataSource: CaptionsStatusDataSource, @unchecked Sendable {
     nonisolated(unsafe) private let subject = CurrentValueSubject<CaptionsState, Never>(.disabled)
 
+    let subscriptions = SubscriptionCounter()
+
     nonisolated var captionsState: AnyPublisher<CaptionsState, Never> {
-        subject.eraseToAnyPublisher()
+        subject.handleEvents(
+            receiveSubscription: { [subscriptions] _ in subscriptions.started() },
+            receiveCancel: { [subscriptions] in subscriptions.ended() }
+        ).eraseToAnyPublisher()
     }
 
     nonisolated(unsafe) var resetCallCount = 0
@@ -316,8 +369,13 @@ private final class MockCallFacade: CallFacade, @unchecked Sendable {
     }
 
     nonisolated(unsafe) var _captionsPublisher = PassthroughSubject<[CaptionItem], Never>()
+    let captionSubscriptions = SubscriptionCounter()
+
     nonisolated var captionsPublisher: AnyPublisher<[CaptionItem], Never> {
-        _captionsPublisher.eraseToAnyPublisher()
+        _captionsPublisher.handleEvents(
+            receiveSubscription: { [captionSubscriptions] _ in captionSubscriptions.started() },
+            receiveCancel: { [captionSubscriptions] in captionSubscriptions.ended() }
+        ).eraseToAnyPublisher()
     }
 
     nonisolated(unsafe) var recordedActions: [CallActions] = []
@@ -360,4 +418,46 @@ private final class MockCallFacade: CallFacade, @unchecked Sendable {
 
     func applyPublisherAdvancedSettings(_ settings: VERADomain.PublisherAdvancedSettings) async throws {}
     func updateLivePublisherAdvancedSettings(_ settings: PublisherAdvancedSettings) async {}
+}
+
+/// Counts actual Combine subscription lifetimes, including abandoned readers.
+private final class SubscriptionCounter: @unchecked Sendable {
+    private let lock = NSLock()
+    private var count = 0
+    var activeCount: Int { lock.withLock { count } }
+    func started() { lock.withLock { count += 1 } }
+    func ended() { lock.withLock { count -= 1 } }
+}
+
+/// Holds the first write open without sleeps so duplicate startup is exercised deterministically.
+private actor SuspendedCaptionsWriter: CaptionsWriter {
+    private var resume: CheckedContinuation<Void, Never>?
+    private var started: CheckedContinuation<Void, Never>?
+    private var firstWriteStarted = false
+    private var concurrentWrites = 0
+    private(set) var maximumConcurrentWrites = 0
+    private(set) var updates: [[CaptionItem]] = []
+
+    func updateCaptions(_ captions: [CaptionItem]) async {
+        concurrentWrites += 1
+        maximumConcurrentWrites = max(maximumConcurrentWrites, concurrentWrites)
+        if !firstWriteStarted {
+            firstWriteStarted = true
+            started?.resume()
+            started = nil
+            await withCheckedContinuation { resume = $0 }
+        }
+        updates.append(captions)
+        concurrentWrites -= 1
+    }
+
+    func waitForFirstWrite() async {
+        guard !firstWriteStarted else { return }
+        await withCheckedContinuation { started = $0 }
+    }
+
+    func resumeFirstWrite() {
+        resume?.resume()
+        resume = nil
+    }
 }

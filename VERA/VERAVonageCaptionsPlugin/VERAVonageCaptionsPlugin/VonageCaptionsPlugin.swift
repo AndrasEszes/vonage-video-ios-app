@@ -79,6 +79,9 @@ public final class VonageCaptionsPlugin: VonagePlugin, VonagePluginCallHolder {
     /// - **Caption data** – forwards ``CallFacade/captionsPublisher`` updates
     ///   to the ``CaptionsWriter``.
     ///
+    /// Repeated starts keep the current observers and any in-flight caption write.
+    /// Call `callDidEnd()` before starting another call session.
+    ///
     /// - Parameter userInfo: Contextual info passed by the plugin coordinator
     ///   (not used by this plugin).
     public func callDidStart(_ userInfo: [String: Any]) async throws {
@@ -109,6 +112,9 @@ public final class VonageCaptionsPlugin: VonagePlugin, VonagePluginCallHolder {
 
     /// Creates the two Combine pipelines that power this plugin.
     private func initObservers() {
+        // Lifecycle notifications may repeat; retain one subscription/worker pair until call end.
+        guard cancellables.isEmpty else { return }
+
         captionsStatusDataSource.captionsState
             .sink { [weak self] state in
                 self?.processNewState(state)

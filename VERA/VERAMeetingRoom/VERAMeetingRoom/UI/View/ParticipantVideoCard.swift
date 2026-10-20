@@ -65,12 +65,15 @@ struct ParticipantVideoCard: View {
     @Environment(\.meetingRoomTheme) private var theme
     let participant: UIParticipant
     let activeSpeakerId: String?
+    let fillsAvailableSpace: Bool
     init(
         participant: UIParticipant,
-        activeSpeakerId: String?
+        activeSpeakerId: String?,
+        fillsAvailableSpace: Bool = false
     ) {
         self.participant = participant
         self.activeSpeakerId = activeSpeakerId
+        self.fillsAvailableSpace = fillsAvailableSpace
     }
 
     var body: some View {
@@ -89,13 +92,13 @@ struct ParticipantVideoCard: View {
                             )
                         )
                         .if(
-                            !participant.isScreenshare,
+                            !participant.isScreenshare && !fillsAvailableSpace,
                             transform: { view in
                                 view.aspectRatio(ParticipantVideoCardConstants.containerAspectRatio, contentMode: .fit)
                             }
                         )
                         .if(
-                            participant.isScreenshare,
+                            participant.isScreenshare && !fillsAvailableSpace,
                             transform: { view in
                                 view.aspectRatio(participant.aspectRatio, contentMode: .fit)
                             }
@@ -149,13 +152,13 @@ struct ParticipantVideoCard: View {
                             )
                         )
                         .if(
-                            !participant.isScreenshare,
+                            !participant.isScreenshare && !fillsAvailableSpace,
                             transform: { view in
                                 view.aspectRatio(ParticipantVideoCardConstants.containerAspectRatio, contentMode: .fit)
                             }
                         )
                         .if(
-                            participant.isScreenshare,
+                            participant.isScreenshare && !fillsAvailableSpace,
                             transform: { view in
                                 view.aspectRatio(participant.aspectRatio, contentMode: .fit)
                             }

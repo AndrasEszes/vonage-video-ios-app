@@ -26,6 +26,29 @@ struct VonagePublisherCallbackLifetimeTests {
         withExtendedLifetime(observation) {}
     }
 
+    @Test("Stream lifecycle callbacks preserve order and ignore callbacks after cleanup")
+    func streamLifecycleCallbacksRespectCleanup() {
+        let publisher = VonagePublisherSpy()
+        // These delegate callbacks consume no stream fields; an opaque SDK object is sufficient.
+        let stream = OTStream()
+        var events: [String] = []
+        publisher.onStreamCreated = { events.append("created") }
+        publisher.onStreamDestroyed = { events.append("destroyed") }
+        publisher.publisher(publisher.exposedOTPublisher, streamCreated: stream)
+        publisher.publisher(publisher.exposedOTPublisher, streamDestroyed: stream)
+        #expect(events == ["created", "destroyed"])
+
+        publisher.cleanUp()
+        publisher.publisher(publisher.exposedOTPublisher, streamCreated: stream)
+        publisher.publisher(publisher.exposedOTPublisher, streamDestroyed: stream)
+        #expect(events == ["created", "destroyed"])
+
+        publisher.setup()
+        publisher.onStreamCreated = { events.append("recreated") }
+        publisher.publisher(publisher.exposedOTPublisher, streamCreated: stream)
+        #expect(events == ["created", "destroyed", "recreated"])
+    }
+
     @Test("Repeated setup does not duplicate participant observations or emissions")
     func repeatedSetupDoesNotDuplicateObservers() {
         let publisher = VonagePublisherSpy()

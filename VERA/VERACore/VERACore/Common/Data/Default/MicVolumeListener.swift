@@ -17,9 +17,13 @@ final class MicVolumeListener {
         subsystem: Bundle.main.bundleIdentifier ?? "com.vonage", category: "MicVolumeListener")
     nonisolated private static let scale: Float = 10
 
-    private let audioEngine = AVAudioEngine()
+    private let audioEngine: any MicrophoneAudioEngine
     private var isListening = false
     private var volumeRelay = EventRelay<Float, Never>()
+
+    init(audioEngine: (any MicrophoneAudioEngine)? = nil) {
+        self.audioEngine = audioEngine ?? DeviceMicrophoneAudioEngine()
+    }
 
     /// Starts listening to microphone volume and emits normalized audio levels (0.0–1.0).
     ///
@@ -31,8 +35,7 @@ final class MicVolumeListener {
                 .throttle(for: .seconds(samplingInterval), scheduler: DispatchQueue.main, latest: true)
                 .eraseToAnyPublisher()
         }
-        let inputNode = audioEngine.inputNode
-        let format = inputNode.outputFormat(forBus: 0)
+        let format = audioEngine.inputFormat
 
         guard format.sampleRate > 0, format.channelCount > 0 else {
             Self.logger.warning(
@@ -47,7 +50,7 @@ final class MicVolumeListener {
         // The real-time callback owns only the Sendable relay for this recording.
         // A late callback after stop cannot reach this listener or a later recording.
         let relay = volumeRelay
-        inputNode.installTap(onBus: 0, bufferSize: 1024, format: format) { @Sendable buffer, _ in
+        audioEngine.installTap(format: format) { @Sendable buffer in
             let rms = Self.normalizeAudioLevel(buffer: buffer)
             relay.send(min(max(rms, 0), 1))
         }
@@ -69,7 +72,7 @@ final class MicVolumeListener {
     func stop() {
         guard isListening else { return }
         isListening = false
-        audioEngine.inputNode.removeTap(onBus: 0)
+        audioEngine.removeTap()
         audioEngine.stop()
         volumeRelay.send(completion: .finished)
         volumeRelay = EventRelay<Float, Never>()
@@ -90,4 +93,30 @@ final class MicVolumeListener {
         // AVAudioEngine float samples are already in -1.0…1.0, so no Short.MAX_VALUE division needed
         return min(max(rms * Self.scale, 0), 1)
     }
+}
+
+/// Keeps hardware access separate from recording ownership and audio normalization.
+@MainActor
+protocol MicrophoneAudioEngine {
+    var inputFormat: AVAudioFormat { get }
+    func installTap(format: AVAudioFormat, handler: @escaping @Sendable (AVAudioPCMBuffer) -> Void)
+    func removeTap()
+    func start() throws
+    func stop()
+}
+
+@MainActor
+private final class DeviceMicrophoneAudioEngine: MicrophoneAudioEngine {
+    private let engine = AVAudioEngine()
+    var inputFormat: AVAudioFormat { engine.inputNode.outputFormat(forBus: 0) }
+
+    func installTap(format: AVAudioFormat, handler: @escaping @Sendable (AVAudioPCMBuffer) -> Void) {
+        engine.inputNode.installTap(onBus: 0, bufferSize: 1024, format: format) { @Sendable buffer, _ in
+            handler(buffer)
+        }
+    }
+
+    func removeTap() { engine.inputNode.removeTap(onBus: 0) }
+    func start() throws { try engine.start() }
+    func stop() { engine.stop() }
 }

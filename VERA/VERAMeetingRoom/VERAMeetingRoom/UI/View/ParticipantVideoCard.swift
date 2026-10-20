@@ -243,7 +243,7 @@ struct ParticipantVideoCardOverlays: View {
                             height: ParticipantVideoCardConstants.indicatorSize)
                 }
                 Spacer()
-                if isLocal {
+                if isLocal && isMicEnabled {
                     ZStack {
                         AudioLevelIndicatorView(
                             audioLevel: audioLevel,
@@ -259,7 +259,7 @@ struct ParticipantVideoCardOverlays: View {
                         participantID: participantID,
                         isMicEnabled: isMicEnabled,
                         participantName: name,
-                        onForceMute: onForceMute
+                        onForceMute: isLocal ? nil : onForceMute
                     )
                 }
             }

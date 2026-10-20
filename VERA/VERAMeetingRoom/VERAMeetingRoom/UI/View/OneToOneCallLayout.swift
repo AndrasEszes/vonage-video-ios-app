@@ -27,12 +27,13 @@ struct FloatingSelfViewGeometry {
     let tileSize: CGSize
     let centers: CGRect
 
-    init(container: CGSize, bottomInset: CGFloat) {
+    init(container: CGSize, bottomInset: CGFloat, labelClearance: CGFloat = 48) {
         let width = max(0, container.width)
         let height = max(0, container.height)
         let horizontalInset = min(12, width / 2)
         let topInset = min(48, height / 2)
-        let bottomInset = min(max(12, bottomInset + 12), height - topInset)
+        // Keep both bottom corners and the drag area above the remote name label.
+        let bottomInset = min(max(labelClearance, bottomInset + 12), height - topInset)
         let availableHeight = max(0, height - topInset - bottomInset)
         let tileWidth = max(0, min(144, width * 0.32, availableHeight * 0.75))
         tileSize = CGSize(width: tileWidth, height: tileWidth / 0.75)
@@ -73,11 +74,14 @@ struct OneToOneCallLayout: View {
     @Binding var corner: FloatingSelfViewCorner
     let bottomInset: CGFloat
     @State private var dragOffset = CGSize.zero
+    @ScaledMetric(relativeTo: .caption) private var labelClearance: CGFloat = 48
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         GeometryReader { proxy in
-            let geometry = FloatingSelfViewGeometry(container: proxy.size, bottomInset: bottomInset)
+            let geometry = FloatingSelfViewGeometry(
+                container: proxy.size, bottomInset: bottomInset, labelClearance: labelClearance
+            )
             let anchor = geometry.center(for: corner)
             let center = geometry.clamped(CGPoint(x: anchor.x + dragOffset.width, y: anchor.y + dragOffset.height))
             ZStack(alignment: .topLeading) {

@@ -3,17 +3,24 @@ import Foundation
 /// Transfers value events from SDK callback threads to one ordered UI drain.
 ///
 /// The lock protects only the pending buffer and scheduling state. Handlers always execute
-/// outside the lock on MainActor, so reentrant callbacks cannot deadlock. Ordered control
-/// events are delivered in batches of at most 64, yielding between batches.
+/// outside the lock on MainActor, so reentrant callbacks cannot deadlock. Audio levels and
+/// dimensions may replace their last pending value; control and caption events remain ordered.
 final class MainActorEventQueue<Event: Sendable>: @unchecked Sendable {
     private let lock = NSLock()
-    private var pending: [Event] = []
+    /// Runs under the buffer lock before coalescing. It must be constructed in a nonisolated
+    /// context; the plain closure type cannot prove this, so callers use nonisolated factories.
+    /// Captured value-processing state belongs exclusively to this queue's lock. The operation
+    /// must be short and must never invoke SDK, UI or queue callbacks.
+    private let transformEvent: (Event) -> Event
+    private var pending: [(key: String?, event: Event)] = []
     private var scheduled = false
     private var acceptingEvents = true
     @MainActor private var handler: (@MainActor (Event) -> Void)?
     @MainActor private var generation: UInt64 = 0
 
-    @MainActor init() {}
+    @MainActor init(transformEvent: @escaping (Event) -> Event = { $0 }) {
+        self.transformEvent = transformEvent
+    }
 
     @MainActor func setHandler(_ handler: @escaping @MainActor (Event) -> Void) {
         self.handler = handler
@@ -28,13 +35,18 @@ final class MainActorEventQueue<Event: Sendable>: @unchecked Sendable {
         lock.unlock()
     }
 
-    func send(_ event: Event) {
+    func send(_ event: Event, replacing key: String? = nil) {
         lock.lock()
         guard acceptingEvents else {
             lock.unlock()
             return
         }
-        pending.append(event)
+        let event = transformEvent(event)
+        if let key, let index = pending.lastIndex(where: { $0.key == key }) {
+            pending[index].event = event
+        } else {
+            pending.append((key, event))
+        }
         let shouldSchedule = !scheduled
         scheduled = true
         lock.unlock()
@@ -66,7 +78,7 @@ final class MainActorEventQueue<Event: Sendable>: @unchecked Sendable {
         let batchGeneration = generation
         for item in batch {
             guard generation == batchGeneration else { break }
-            handler?(item)
+            handler?(item.event)
         }
 
         lock.lock()

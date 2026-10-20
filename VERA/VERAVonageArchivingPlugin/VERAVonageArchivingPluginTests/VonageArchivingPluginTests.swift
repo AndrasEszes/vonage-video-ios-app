@@ -10,6 +10,7 @@ import VERAArchivingTestHelpers
 import VERAVonage
 import VERAVonageArchivingPlugin
 
+@MainActor
 @Suite("Vonage Archiving Plugin tests")
 struct VonageArchivingPluginTests {
 

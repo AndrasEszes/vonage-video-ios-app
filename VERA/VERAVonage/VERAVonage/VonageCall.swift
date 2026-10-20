@@ -23,6 +23,7 @@ import VERADomain
 /// - Remote participant subscriptions through `VonageSubscriber`
 /// - Reactive state observation via Combine publishers
 /// - Optional extensibility via the plugin system
+@MainActor
 public final class VonageCall: CallFacade, AudioMuteControllable {
 
     private var cancellables = Set<AnyCancellable>()
@@ -30,6 +31,10 @@ public final class VonageCall: CallFacade, AudioMuteControllable {
     /// Cancelled individually when a subscriber is removed to prevent stale sinks
     /// from re-adding participants to the repository during cleanup.
     private var subscriberCancellables: [String: Set<AnyCancellable>] = [:]
+    private let participantUpdates = ParticipantUpdateQueue()
+    /// Stream creation/removal is low-frequency ordered control work, separate from value updates.
+    private var subscriberLifecycleTask: Task<Void, Never>?
+    private var pluginStartTask: Task<Void, Never>?
     /// Dedicated cancellable set for publisher observation.
     /// Cleared and rebuilt every time the publisher is replaced so stale subscriptions
     /// from the old publisher don't accumulate and cause redundant main-thread work.
@@ -120,6 +125,9 @@ public final class VonageCall: CallFacade, AudioMuteControllable {
     /// Tracks whether network stats collection is currently active.
     private var isNetworkStatsEnabled = false
     private var isSubscriberExtraStatsEnabled = false
+    /// Invalidates subscriber lookups suspended across settings changes or disconnect.
+    private var networkStatsGeneration: UInt64 = 0
+    private var subscriberExtraStatsGeneration: UInt64 = 0
 
     /// A publisher that emits aggregated network statistics, never fails.
     ///
@@ -143,7 +151,7 @@ public final class VonageCall: CallFacade, AudioMuteControllable {
 
     /// Creates a session for the given room, resolving fresh credentials each
     /// time. Injected so the call can (re)acquire its session at connect time.
-    private let makeSession: (RoomName) async throws -> VonageSession
+    private let makeSession: @MainActor (RoomName) async throws -> VonageSession
 
     /// The publisher for the local participant's audio and video.
     ///
@@ -199,7 +207,7 @@ public final class VonageCall: CallFacade, AudioMuteControllable {
     /// - Important: Call ``setup()`` before ``connect()`` to configure handlers and observers.
     public init(
         roomName: RoomName,
-        makeSession: @escaping (RoomName) async throws -> VonageSession,
+        makeSession: @escaping @MainActor (RoomName) async throws -> VonageSession,
         publisher: VonagePublisher,
         publisherRepository: PublisherRepository,
         statsCollector: StatsCollector
@@ -252,10 +260,12 @@ public final class VonageCall: CallFacade, AudioMuteControllable {
             self?.sessionDidReconnect()
         }
         session.onSessionDidConnect = { [weak self] in
-            self?.updateCallState(to: .connected)
-            self?.publishToSession()
-            Task { [weak self] in
-                await self?.notifyCallDidStartToPlugins()
+            guard let self, self._callState.value == .connecting else { return }
+            self.updateCallState(to: .connected)
+            self.publishToSession()
+            self.pluginStartTask = Task { [weak self] in
+                guard let self, !Task.isCancelled, self._callState.value == .connected else { return }
+                await self.notifyCallDidStartToPlugins()
             }
         }
         session.onSessionSignal = { [weak self] signal in
@@ -281,7 +291,7 @@ public final class VonageCall: CallFacade, AudioMuteControllable {
         }
     }
 
-    private func updateParticipantsState(_ state: ParticipantsState) async {
+    private func updateParticipantsState(_ state: ParticipantsState) {
         _participantsPublisher.value = .init(
             localParticipant: publisherParticipant,
             participants: state.participants,
@@ -298,7 +308,9 @@ public final class VonageCall: CallFacade, AudioMuteControllable {
     private func publishToSession() {
         guard !publisher.hasSession else { return }
         do {
-            try requireSession().publish(publisher: publisher)
+            let session = try requireSession()
+            publisher.prepareCallbackDelivery()
+            try session.publish(publisher: publisher)
             // In PiP mode, read `participant` only after setup(), which swaps in the renderer view.
             // Reading it before would freeze the local tile.
             publisher.setup()
@@ -312,12 +324,13 @@ public final class VonageCall: CallFacade, AudioMuteControllable {
     private func setupActiveSpeakerObservation() {
         activeSpeakerTracker.$activeSpeaker
             .removeDuplicates()
-            .sink { [weak self] _ in
-                Task { [weak self] in
-                    guard let self else { return }
-                    let state = await self.callStateManager.getCurrentState()
-                    await self.updateParticipantsState(state)
-                }
+            .sink { [weak self] activeSpeaker in
+                guard let self else { return }
+                let current = self._participantsPublisher.value
+                self._participantsPublisher.value = .init(
+                    localParticipant: current.localParticipant,
+                    participants: current.participants,
+                    activeParticipantId: activeSpeaker.participantId)
             }
             .store(in: &cancellables)
     }
@@ -340,9 +353,7 @@ public final class VonageCall: CallFacade, AudioMuteControllable {
                     participants: currentState.participants,
                     activeParticipantId: currentState.activeParticipantId
                 )
-                Task { [weak self] in
-                    await self?.updateParticipantsState(newState)
-                }
+                self.updateParticipantsState(newState)
             }
             .store(in: &publisherCancellables)
 
@@ -355,17 +366,32 @@ public final class VonageCall: CallFacade, AudioMuteControllable {
 
     // MARK: Subscriber
 
+    private func enqueueSubscriberLifecycle(_ operation: @escaping @MainActor () async -> Void) {
+        guard _callState.value == .connected || _callState.value == .connecting else { return }
+        let predecessor = subscriberLifecycleTask
+        subscriberLifecycleTask = Task {
+            await predecessor?.value
+            guard !Task.isCancelled else { return }
+            await operation()
+        }
+    }
+
     private func addSubscriber(_ stream: OTStream) {
-        Task { [weak self] in
-            guard let self else { return }
-            await self.doSubscribe(stream)
+        enqueueSubscriberLifecycle { [weak self] in
+            await self?.doSubscribe(stream)
         }
     }
 
     @MainActor
     private func doSubscribe(_ stream: OTStream) async {
+        guard await callStateManager.getSubscriber(id: stream.streamId) == nil,
+            !Task.isCancelled,
+            _callState.value == .connected || _callState.value == .connecting
+        else { return }
+        var createdSubscriber: VonageSubscriber?
         do {
             let vonageSubscriber = try subscriberFactory.makeSubscriber(stream)
+            createdSubscriber = vonageSubscriber
             vonageSubscriber.onError = { [weak self] in
                 self?.removeSubscriber(stream)
             }
@@ -379,30 +405,49 @@ public final class VonageCall: CallFacade, AudioMuteControllable {
                 statsCollector.requestRtcStats(from: vonageSubscriber.otSubscriber)
             }
 
-            setupSubscriberObservation(vonageSubscriber)
+            await setupSubscriberObservation(vonageSubscriber)
             setupAudioLevelObservation(vonageSubscriber)
+            guard !Task.isCancelled else {
+                await discardUnregisteredSubscriber(vonageSubscriber)
+                return
+            }
 
             try requireSession().subscribe(subscriber: vonageSubscriber)
 
             let state = await callStateManager.addSubscriber(vonageSubscriber)
-            await updateParticipantsState(state)
+            updateParticipantsState(state)
 
             if areCaptionsEnabled {
                 vonageSubscriber.enableCaptions()
             }
         } catch {
+            if let createdSubscriber { await discardUnregisteredSubscriber(createdSubscriber) }
             _eventsPublisher.send(.error(error))
         }
     }
 
-    private func setupSubscriberObservation(_ subscriber: VonageSubscriber) {
+    private func discardUnregisteredSubscriber(_ subscriber: VonageSubscriber) async {
+        subscriberCancellables[subscriber.id] = nil
+        await participantUpdates.remove(id: subscriber.id)
+        statsCollector.removeSubscriber(connectionId: subscriber.stream.connection.connectionId)
+        subscriber.cleanUp()
+    }
+
+    private func setupSubscriberObservation(_ subscriber: VonageSubscriber) async {
+        let id = subscriber.id
+        // Generation is installed before observing the subject's synchronous initial value.
+        // The operation checks it again after awaiting the actor write to reject retired UI state.
+        let generation = await participantUpdates.register(id: id) { [weak self] participant, generation in
+            guard let self,
+                self.participantUpdates.contains(id: id, generation: generation)
+            else { return }
+            let state = await self.callStateManager.updateParticipant(participant)
+            guard self.participantUpdates.contains(id: id, generation: generation), !Task.isCancelled else { return }
+            self.updateParticipantsState(state)
+        }
         subscriber.$participant
             .sink { [weak self] participant in
-                Task { [weak self] in
-                    guard let self = self else { return }
-                    let state = await self.callStateManager.updateParticipant(participant)
-                    await self.updateParticipantsState(state)
-                }
+                self?.participantUpdates.submit(participant, generation: generation)
             }
             .store(in: &subscriberCancellables[subscriber.id, default: []])
     }
@@ -410,29 +455,27 @@ public final class VonageCall: CallFacade, AudioMuteControllable {
     private func setupAudioLevelObservation(_ subscriber: VonageSubscriber) {
         subscriber.$audioLevel
             .sink { [weak self, weak subscriber] audioLevel in
-                Task { [weak self, weak subscriber] in
-                    guard let self, let subscriber else { return }
-                    let speakerInfo = SpeakerInfo(
+                guard let self, let subscriber else { return }
+                self.activeSpeakerTracker.updatedParticipant(
+                    SpeakerInfo(
                         id: subscriber.participant.id,
                         audioLevel: audioLevel,
-                        isMicEnabled: subscriber.participant.isMicEnabled
-                    )
-                    await self.callStateManager.updateActiveSpeaker(speakerInfo)
-                }
+                        isMicEnabled: subscriber.participant.isMicEnabled))
             }
             .store(in: &subscriberCancellables[subscriber.id, default: []])
     }
 
     private func removeSubscriber(_ stream: OTStream) {
-        Task { @MainActor [weak self] in
+        enqueueSubscriberLifecycle { [weak self] in
             guard let self = self else { return }
             // Cancel subscriber sinks before cleanup to prevent $participant
             // from re-adding the participant to the repository.
             self.subscriberCancellables[stream.streamId] = nil
+            await self.participantUpdates.remove(id: stream.streamId)
             self.statsCollector.removeSubscriber(connectionId: stream.connection.connectionId)
             let (_, state) = await callStateManager.removeSubscriber(id: stream.streamId)
             // There is no need to do a session unsubscribe if the stream has been destroyed
-            await self.updateParticipantsState(state)
+            self.updateParticipantsState(state)
         }
     }
 
@@ -479,9 +522,26 @@ public final class VonageCall: CallFacade, AudioMuteControllable {
             throw CallError.callNotConnected
         }
         _callState.value = .disconnecting
+        networkStatsGeneration &+= 1
+        subscriberExtraStatsGeneration &+= 1
+        isNetworkStatsEnabled = false
+        isSubscriberExtraStatsEnabled = false
 
         do {
+            // Join stream control and value writes before removing actor-owned membership.
+            let streamControl = subscriberLifecycleTask
+            subscriberLifecycleTask = nil
+            streamControl?.cancel()
+            await streamControl?.value
+            subscriberCancellables.removeAll()
+            await participantUpdates.stopAll()
             await callStateManager.cleanUpParticipants()
+            // Media membership is released before waiting for custom plugin initialization.
+            // An initialization that ignores cancellation must finish before its final teardown.
+            let pluginStart = pluginStartTask
+            pluginStartTask = nil
+            pluginStart?.cancel()
+            await pluginStart?.value
             await notifyCallDidEndToPlugins()
             unassignPlugins()
             cancellables.forEach { $0.cancel() }
@@ -684,25 +744,45 @@ public final class VonageCall: CallFacade, AudioMuteControllable {
         plugins.removeAll()
     }
 
-    private func notifyCallDidStartToPlugins() async {
-        await withTaskGroup(of: (String, Result<Void, Swift.Error>).self) { group in
-            for plugin in plugins {
-                group.addTask {
-                    do {
-                        try await plugin.callDidStart(self.callParams)
-                        return (plugin.pluginIdentifier, .success(()))
-                    } catch {
-                        return (plugin.pluginIdentifier, .failure(error))
-                    }
-                }
-            }
+    private struct PluginLifecycleResult: Sendable {
+        let identifier: String
+        let result: Result<Void, Swift.Error>
+    }
 
-            for await (identifier, result) in group {
-                switch result {
+    /// SDK dictionaries stay on the plugin/UI owner; child tasks transfer checked values only.
+    private static func startPlugin(
+        _ plugin: any VonagePlugin,
+        params: [String: String]
+    ) async -> PluginLifecycleResult {
+        do {
+            try await plugin.callDidStart(params)
+            return PluginLifecycleResult(identifier: plugin.pluginIdentifier, result: .success(()))
+        } catch {
+            return PluginLifecycleResult(identifier: plugin.pluginIdentifier, result: .failure(error))
+        }
+    }
+
+    private static func endPlugin(_ plugin: any VonagePlugin) async -> PluginLifecycleResult {
+        do {
+            try await plugin.callDidEnd()
+            return PluginLifecycleResult(identifier: plugin.pluginIdentifier, result: .success(()))
+        } catch {
+            return PluginLifecycleResult(identifier: plugin.pluginIdentifier, result: .failure(error))
+        }
+    }
+
+    private func notifyCallDidStartToPlugins() async {
+        let params = callParams
+        await withTaskGroup(of: PluginLifecycleResult.self) { group in
+            for plugin in plugins {
+                group.addTask { await VonageCall.startPlugin(plugin, params: params) }
+            }
+            for await outcome in group {
+                switch outcome.result {
                 case .success:
-                    print("✅ Plugin \(identifier) started successfully")
+                    print("✅ Plugin \(outcome.identifier) started successfully")
                 case .failure(let error):
-                    print("❌ Plugin \(identifier) failed to start: \(error)")
+                    print("❌ Plugin \(outcome.identifier) failed to start: \(error)")
                     self._eventsPublisher.send(.error(error))
                 }
             }
@@ -710,24 +790,16 @@ public final class VonageCall: CallFacade, AudioMuteControllable {
     }
 
     private func notifyCallDidEndToPlugins() async {
-        await withTaskGroup(of: (String, Result<Void, Swift.Error>).self) { group in
+        await withTaskGroup(of: PluginLifecycleResult.self) { group in
             for plugin in plugins {
-                group.addTask {
-                    do {
-                        try await plugin.callDidEnd()
-                        return (plugin.pluginIdentifier, .success(()))
-                    } catch {
-                        return (plugin.pluginIdentifier, .failure(error))
-                    }
-                }
+                group.addTask { await VonageCall.endPlugin(plugin) }
             }
-
-            for await (identifier, result) in group {
-                switch result {
+            for await outcome in group {
+                switch outcome.result {
                 case .success:
-                    print("✅ Plugin \(identifier) ended successfully")
+                    print("✅ Plugin \(outcome.identifier) ended successfully")
                 case .failure(let error):
-                    print("❌ Plugin \(identifier) failed to end: \(error)")
+                    print("❌ Plugin \(outcome.identifier) failed to end: \(error)")
                     self._eventsPublisher.send(.error(error))
                 }
             }
@@ -809,7 +881,7 @@ public final class VonageCall: CallFacade, AudioMuteControllable {
             )
         )
 
-        // 5. Recreate the publisher off the main thread to avoid blocking
+        // 5. Recreate the publisher on its UI owner
         try publisherRepository.recreatePublisher(mergedSettings)
 
         guard let newPublisher = try publisherRepository.getPublisher() as? VonagePublisher else {
@@ -852,7 +924,7 @@ public final class VonageCall: CallFacade, AudioMuteControllable {
 
         // 13. Update participants state
         let state = await callStateManager.getCurrentState()
-        await updateParticipantsState(state)
+        updateParticipantsState(state)
     }
 
     /// Applies live-updatable publisher settings to the current publisher without recreating it.
@@ -883,8 +955,12 @@ public final class VonageCall: CallFacade, AudioMuteControllable {
     /// Sets the `networkStatsDelegate` on the publisher and all current subscribers.
     /// New subscribers added after this call will also have their delegate set automatically.
     public func enableNetworkStats() {
-        guard !isNetworkStatsEnabled else { return }
+        guard !isNetworkStatsEnabled,
+            _callState.value != .disconnecting, _callState.value != .disconnected
+        else { return }
         isNetworkStatsEnabled = true
+        networkStatsGeneration &+= 1
+        let generation = networkStatsGeneration
 
         publisher.otPublisher.networkStatsDelegate = statsCollector
         statsCollector.requestRtcStats(from: publisher.otPublisher)
@@ -892,6 +968,7 @@ public final class VonageCall: CallFacade, AudioMuteControllable {
         Task { [weak self] in
             guard let self else { return }
             let subscribers = await self.callStateManager.getAllSubscribers()
+            guard self.networkStatsGeneration == generation, self.isNetworkStatsEnabled else { return }
             for subscriber in subscribers {
                 subscriber.otSubscriber.networkStatsDelegate = self.statsCollector
                 self.statsCollector.requestRtcStats(from: subscriber.otSubscriber)
@@ -904,12 +981,21 @@ public final class VonageCall: CallFacade, AudioMuteControllable {
     /// This keeps the shared network stats pipeline alive while selectively
     /// enriching subscriber metrics with RTC stats reports.
     public func enableSubscriberExtraStats() {
-        guard !isSubscriberExtraStatsEnabled else { return }
+        guard !isSubscriberExtraStatsEnabled,
+            _callState.value != .disconnecting, _callState.value != .disconnected
+        else { return }
         isSubscriberExtraStatsEnabled = true
+        subscriberExtraStatsGeneration &+= 1
+        let extraGeneration = subscriberExtraStatsGeneration
+        let statsGeneration = networkStatsGeneration
 
         Task { [weak self] in
             guard let self else { return }
             let subscribers = await self.callStateManager.getAllSubscribers()
+            guard self.networkStatsGeneration == statsGeneration,
+                self.subscriberExtraStatsGeneration == extraGeneration,
+                self.isNetworkStatsEnabled, self.isSubscriberExtraStatsEnabled
+            else { return }
             for subscriber in subscribers {
                 self.statsCollector.requestRtcStats(from: subscriber.otSubscriber)
             }
@@ -923,6 +1009,7 @@ public final class VonageCall: CallFacade, AudioMuteControllable {
     public func disableSubscriberExtraStats() {
         guard isSubscriberExtraStatsEnabled else { return }
         isSubscriberExtraStatsEnabled = false
+        subscriberExtraStatsGeneration &+= 1
     }
 
     /// Stops collecting network statistics and clears cached data.
@@ -932,6 +1019,8 @@ public final class VonageCall: CallFacade, AudioMuteControllable {
     public func disableNetworkStats() {
         guard isNetworkStatsEnabled else { return }
         isNetworkStatsEnabled = false
+        networkStatsGeneration &+= 1
+        let generation = networkStatsGeneration
 
         publisher.otPublisher.networkStatsDelegate = nil
         publisher.otPublisher.rtcStatsReportDelegate = nil
@@ -940,6 +1029,7 @@ public final class VonageCall: CallFacade, AudioMuteControllable {
         Task { [weak self] in
             guard let self else { return }
             let subscribers = await self.callStateManager.getAllSubscribers()
+            guard self.networkStatsGeneration == generation, !self.isNetworkStatsEnabled else { return }
             for subscriber in subscribers {
                 subscriber.otSubscriber.networkStatsDelegate = nil
                 subscriber.otSubscriber.rtcStatsReportDelegate = nil
@@ -998,7 +1088,7 @@ public final class VonageCall: CallFacade, AudioMuteControllable {
     private func startCaptionCleanup() {
         stopCaptionCleanup()
         captionCleanupTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
-            self?.cleanupOldCaptions()
+            Task { @MainActor [weak self] in self?.cleanupOldCaptions() }
         }
     }
 

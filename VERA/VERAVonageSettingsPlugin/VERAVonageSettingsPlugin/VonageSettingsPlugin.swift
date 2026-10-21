@@ -44,6 +44,11 @@ import VERAVonage
 public final class VonageSettingsPlugin: VonagePlugin, VonagePluginCallHolder {
 
     private var cancellables = Set<AnyCancellable>()
+    /// One observation lifetime per call; late callbacks and suspended reads must match it.
+    private var isStarted = false
+    private var lifecycleGeneration: UInt64 = 0
+    /// A replacement call cannot install observers until the previous teardown finishes.
+    private var teardownTask: Task<Void, Never>?
     /// Tracks the in-flight publisher-settings Task so it can be cancelled if new
     /// settings arrive before the previous republish cycle finishes.
     private var applySettingsTask: Task<Void, Never>?
@@ -84,9 +89,17 @@ public final class VonageSettingsPlugin: VonagePlugin, VonagePluginCallHolder {
     ///
     /// - Parameter userInfo: Contextual info passed by the plugin coordinator (unused).
     public func callDidStart(_ userInfo: [String: Any]) async throws {
-        await initObservers()
+        guard !isStarted else { return }
+        isStarted = true
+        lifecycleGeneration &+= 1
+        let generation = lifecycleGeneration
+        await teardownTask?.value
+        guard isCurrentLifecycle(generation) else { return }
+        await initObservers(generation: generation)
+        guard isCurrentLifecycle(generation) else { return }
         call?.enableNetworkStats()
         let currentPreferences = await settingsRepository.getPreferences()
+        guard isCurrentLifecycle(generation) else { return }
         if currentPreferences.senderStatsEnabled {
             call?.enableSubscriberExtraStats()
         } else {
@@ -99,12 +112,24 @@ public final class VonageSettingsPlugin: VonagePlugin, VonagePluginCallHolder {
     /// Cancels subscriptions, waits for in-flight stats writes, then clears stats.
     /// A custom writer must complete its awaited write for teardown to finish.
     public func callDidEnd() async throws {
-        await cancelObservables()
+        isStarted = false
+        lifecycleGeneration &+= 1
+        let predecessor = teardownTask
+        let teardown = Task {
+            await predecessor?.value
+            await cancelObservables()
+        }
+        teardownTask = teardown
+        await teardown.value
     }
 
     // MARK: - Private
 
-    private func initObservers() async {
+    private func isCurrentLifecycle(_ generation: UInt64) -> Bool {
+        isStarted && lifecycleGeneration == generation
+    }
+
+    private func initObservers(generation: UInt64) async {
         // Observe the sender stats toggle and enable/disable network stats collection.
         settingsRepository.preferencesPublisher
             .map(\.senderStatsEnabled)
@@ -112,7 +137,7 @@ public final class VonageSettingsPlugin: VonagePlugin, VonagePluginCallHolder {
             .receive(on: DispatchQueue.main)
             .sink { @Sendable [weak self] isEnabled in
                 MainActor.assumeIsolated {
-                    guard let self else { return }
+                    guard let self, self.isCurrentLifecycle(generation) else { return }
                     if isEnabled {
                         self.call?.enableSubscriberExtraStats()
                     } else {
@@ -131,7 +156,7 @@ public final class VonageSettingsPlugin: VonagePlugin, VonagePluginCallHolder {
             .receive(on: DispatchQueue.main)
             .sink { @Sendable [weak self] settings in
                 MainActor.assumeIsolated {
-                    guard let self, let call = self.call else { return }
+                    guard let self, self.isCurrentLifecycle(generation), let call = self.call else { return }
                     // Cancel any in-flight republish cycle before starting a new one so
                     // the latest settings always win and the overlay can't get stuck.
                     let predecessor = self.applySettingsTask
@@ -155,7 +180,7 @@ public final class VonageSettingsPlugin: VonagePlugin, VonagePluginCallHolder {
             .receive(on: DispatchQueue.main)
             .sink { @Sendable [weak self] settings in
                 MainActor.assumeIsolated {
-                    guard let self, let call = self.call else { return }
+                    guard let self, self.isCurrentLifecycle(generation), let call = self.call else { return }
                     self.liveSettingsGeneration += 1
                     let generation = self.liveSettingsGeneration
                     self.updateLiveSettingsTask?.cancel()

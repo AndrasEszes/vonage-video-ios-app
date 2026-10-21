@@ -336,19 +336,89 @@ struct ArchivesViewModelTests {
         #expect(uiArchive.downloadState == .unavailable)
     }
 
-    @Test func downloadArchiveOpensTranscriptionsThroughPlayRecordingUseCase() async {
+    @Test func downloadTranscriptionSharesDownloadedTranscript() async {
         let playUseCase = SpyPlayRecordingUseCase()
+        let downloadUseCase = SpyDownloadTranscriptionUseCase()
         let archive = makeArchive(
             kind: .transcription,
             transcription: ArchiveTranscription(
                 status: .available, url: URL(string: "https://example.com/transcript.zip")))
-        let sut = makeSUT(playRecordingUseCase: playUseCase)
+        let sut = makeSUT(playRecordingUseCase: playUseCase, downloadTranscriptionUseCase: downloadUseCase)
 
         sut.downloadArchive(archive)
 
-        let callCount = await poll(read: { playUseCase.callCount }) { $0 == 1 }
-        #expect(callCount == 1)
-        #expect(playUseCase.lastArchive?.id == archive.id)
+        let transcript = await poll(read: { await MainActor.run { sut.sharedTranscript } }) { $0 != nil }
+
+        #expect(transcript?.id == archive.id)
+        #expect(downloadUseCase.lastArchive?.id == archive.id)
+        #expect(playUseCase.callCount == 0)
+    }
+
+    @Test func downloadRecordingDoesNotDownloadTranscript() async {
+        let playUseCase = SpyPlayRecordingUseCase()
+        let downloadUseCase = SpyDownloadTranscriptionUseCase()
+        let sut = makeSUT(playRecordingUseCase: playUseCase, downloadTranscriptionUseCase: downloadUseCase)
+
+        sut.downloadArchive(makeArchive(kind: .recording))
+
+        try? await Task.sleep(for: .milliseconds(100))
+
+        #expect(playUseCase.callCount == 1)
+        #expect(downloadUseCase.callCount == 0)
+        #expect(await MainActor.run { sut.sharedTranscript } == nil)
+    }
+
+    @Test func downloadTranscriptionMarksArchiveDownloadingUntilFinished() async {
+        let downloadUseCase = SpyDownloadTranscriptionUseCase()
+        downloadUseCase.delay = .milliseconds(300)
+        let archive = makeArchive(kind: .transcription)
+        let sut = makeSUT(downloadTranscriptionUseCase: downloadUseCase)
+
+        sut.downloadArchive(archive)
+
+        let inProgress = await poll(read: { await MainActor.run { sut.downloadingArchiveIDs } }) { !$0.isEmpty }
+        #expect(inProgress == [archive.id])
+
+        let finished = await poll(read: { await MainActor.run { sut.downloadingArchiveIDs } }) { $0.isEmpty }
+        #expect(finished.isEmpty)
+        #expect(await MainActor.run { sut.sharedTranscript }?.id == archive.id)
+    }
+
+    @Test func downloadTranscriptionIgnoresRepeatedTapsWhileDownloading() async {
+        let downloadUseCase = SpyDownloadTranscriptionUseCase()
+        downloadUseCase.delay = .milliseconds(300)
+        let archive = makeArchive(kind: .transcription)
+        let sut = makeSUT(downloadTranscriptionUseCase: downloadUseCase)
+
+        sut.downloadArchive(archive)
+        sut.downloadArchive(archive)
+
+        _ = await poll(read: { await MainActor.run { sut.sharedTranscript } }) { $0 != nil }
+        #expect(downloadUseCase.callCount == 1)
+    }
+
+    @Test func downloadTranscriptionClearsDownloadingStateOnFailure() async {
+        let downloadUseCase = SpyDownloadTranscriptionUseCase()
+        downloadUseCase.shouldThrowError = true
+        let sut = makeSUT(downloadTranscriptionUseCase: downloadUseCase)
+
+        sut.downloadArchive(makeArchive(kind: .transcription))
+
+        _ = await poll(read: { await MainActor.run { sut.error } }) { $0 != nil }
+        #expect(await MainActor.run { sut.downloadingArchiveIDs }.isEmpty)
+    }
+
+    @Test func downloadTranscriptionSetsErrorOnFailure() async {
+        let downloadUseCase = SpyDownloadTranscriptionUseCase()
+        downloadUseCase.shouldThrowError = true
+        let sut = makeSUT(downloadTranscriptionUseCase: downloadUseCase)
+
+        sut.downloadArchive(makeArchive(kind: .transcription))
+
+        let error = await poll(read: { await MainActor.run { sut.error } }) { $0 != nil }
+
+        #expect(error != nil)
+        #expect(await MainActor.run { sut.sharedTranscript } == nil)
     }
 
     @Test func uiArchiveOnDownloadTriggersDownloadArchive() async {
@@ -377,14 +447,16 @@ struct ArchivesViewModelTests {
     private func makeSUT(
         sessionKey: String = "heart-of-gold",
         archivesRepository: ArchivesRepository = SpyArchivesRepository(),
-        playRecordingUseCase: PlayRecordingUseCase = SpyPlayRecordingUseCase()
+        playRecordingUseCase: PlayRecordingUseCase = SpyPlayRecordingUseCase(),
+        downloadTranscriptionUseCase: DownloadTranscriptionUseCase = SpyDownloadTranscriptionUseCase()
     ) -> ArchivesViewModel {
         let holder = DefaultSessionKeyHolder()
         holder.setSessionKey(sessionKey)
         return ArchivesViewModel(
             sessionKeyProvider: holder,
             archivesRepository: archivesRepository,
-            playRecordingUseCase: playRecordingUseCase
+            playRecordingUseCase: playRecordingUseCase,
+            downloadTranscriptionUseCase: downloadTranscriptionUseCase
         )
     }
 
@@ -466,5 +538,25 @@ final class SpyPlayRecordingUseCase: PlayRecordingUseCase {
         if shouldThrowError {
             throw NSError(domain: "test", code: -1)
         }
+    }
+}
+
+final class SpyDownloadTranscriptionUseCase: DownloadTranscriptionUseCase {
+    var callCount = 0
+    var lastArchive: Archive?
+    var shouldThrowError = false
+    /// How long each download takes, so tests can observe the in-progress state.
+    var delay: Duration = .zero
+
+    func callAsFunction(_ archive: Archive) async throws -> ArchiveTranscript {
+        callCount += 1
+        lastArchive = archive
+        try await Task.sleep(for: delay)
+
+        if shouldThrowError {
+            throw NSError(domain: "test", code: -1)
+        }
+
+        return ArchiveTranscript(id: archive.id, fileURL: URL(fileURLWithPath: "/tmp/transcript.zip"))
     }
 }

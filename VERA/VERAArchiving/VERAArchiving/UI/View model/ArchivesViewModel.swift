@@ -17,18 +17,26 @@ public final class ArchivesViewModel {
     private let archivesRepository: ArchivesRepository
     @ObservationIgnored
     private let playRecordingUseCase: PlayRecordingUseCase
+    @ObservationIgnored
+    private let downloadTranscriptionUseCase: DownloadTranscriptionUseCase
 
     @MainActor public var archives: [ArchiveUIData] = []
     @MainActor public var error: AlertItem?
+    /// A downloaded transcript waiting to be shared or saved by the user.
+    @MainActor public var sharedTranscript: ArchiveTranscript?
+    /// Archives whose download is in progress.
+    @MainActor public private(set) var downloadingArchiveIDs: Set<UUID> = []
 
     public init(
         sessionKeyProvider: SessionKeyProvider,
         archivesRepository: ArchivesRepository,
         playRecordingUseCase: PlayRecordingUseCase,
+        downloadTranscriptionUseCase: DownloadTranscriptionUseCase
     ) {
         self.sessionKeyProvider = sessionKeyProvider
         self.archivesRepository = archivesRepository
         self.playRecordingUseCase = playRecordingUseCase
+        self.downloadTranscriptionUseCase = downloadTranscriptionUseCase
     }
 
     /// Starts loading the archives of the current session, replacing any earlier load.
@@ -79,12 +87,20 @@ public final class ArchivesViewModel {
         return uiArchive
     }
 
-    /// Opens the archive's downloadable file: the recording, or the transcript zip for transcriptions.
+    /// Opens a recording, or downloads a transcript and offers it for sharing.
+    ///
+    /// Requests for an archive that is already downloading are ignored.
     public func downloadArchive(_ archive: Archive) {
         Task { @MainActor [weak self] in
-            guard let self else { return }
+            guard let self, downloadingArchiveIDs.insert(archive.id).inserted else { return }
+            defer { downloadingArchiveIDs.remove(archive.id) }
             do {
-                try await playRecordingUseCase(archive)
+                switch archive.kind {
+                case .recording:
+                    try await playRecordingUseCase(archive)
+                case .transcription:
+                    sharedTranscript = try await downloadTranscriptionUseCase(archive)
+                }
             } catch {
                 self.error = AlertItem.downloadError(error.localizedDescription)
             }

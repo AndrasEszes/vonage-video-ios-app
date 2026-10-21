@@ -128,9 +128,7 @@ struct DefaultArchivingStatusDataSourceTests {
 }
 
 extension AnyPublisher where Failure == Never {
-    @MainActor
     func nextValue() async -> Output {
-        for await value in values { return value }
-        preconditionFailure("Expected a value before publisher completion")
+        await values.first { _ in true }!
     }
 }

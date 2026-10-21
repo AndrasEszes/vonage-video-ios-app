@@ -5,7 +5,7 @@
 import Combine
 import Foundation
 
-public protocol NoiseSuppressionStatusDataSource: Sendable {
+public protocol NoiseSuppressionStatusDataSource {
     var noiseSuppressionState: AnyPublisher<NoiseSuppressionState, Never> { get }
     func set(state: NoiseSuppressionState)
 }

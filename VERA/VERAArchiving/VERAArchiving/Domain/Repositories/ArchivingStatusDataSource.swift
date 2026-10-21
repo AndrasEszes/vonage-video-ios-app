@@ -6,7 +6,7 @@ import Combine
 import Foundation
 import VERADomain
 
-public protocol ArchivingStatusDataSource: Sendable {
+public protocol ArchivingStatusDataSource {
     var archivingState: AnyPublisher<ArchivingState, Never> { get }
     func set(archivingState: ArchivingState)
     func reset()

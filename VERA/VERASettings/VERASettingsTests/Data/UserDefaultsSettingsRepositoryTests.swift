@@ -12,16 +12,12 @@ import VERADomain
 @Suite("UserDefaultsSettingsRepository Tests")
 struct UserDefaultsSettingsRepositoryTests {
 
-    // Each repository receives its own defaults instance. Tests inspect persistence through
-    // the same named suite without sharing a non-Sendable reference with the actor.
-
     // MARK: - Initialization Tests
 
     @Test("Fresh start loads default preferences")
     func freshStartLoadsDefaults() async {
-        let suiteName = "com.vonage.vera.tests.\(UUID().uuidString)"
-        defer { UserDefaults(suiteName: suiteName)?.removePersistentDomain(forName: suiteName) }
-        let repository = UserDefaultsSettingsRepository(userDefaults: UserDefaults(suiteName: suiteName)!)
+        let userDefaults = UserDefaults.ephemeral()
+        let repository = UserDefaultsSettingsRepository(userDefaults: userDefaults)
 
         let preferences = await repository.getPreferences()
 
@@ -30,9 +26,7 @@ struct UserDefaultsSettingsRepositoryTests {
 
     @Test("Existing data loads correctly from UserDefaults")
     func existingDataLoadsCorrectly() async throws {
-        let suiteName = "com.vonage.vera.tests.\(UUID().uuidString)"
-        defer { UserDefaults(suiteName: suiteName)?.removePersistentDomain(forName: suiteName) }
-        let userDefaults = UserDefaults(suiteName: suiteName)!
+        let userDefaults = UserDefaults.ephemeral()
 
         // Pre-populate UserDefaults with custom preferences
         let customPreferences = PublisherSettingsPreferences(
@@ -53,7 +47,7 @@ struct UserDefaultsSettingsRepositoryTests {
         userDefaults.set(data, forKey: "com.vonage.vera.publisherSettingsPreferences")
 
         // Create repository - should load existing data
-        let repository = UserDefaultsSettingsRepository(userDefaults: UserDefaults(suiteName: suiteName)!)
+        let repository = UserDefaultsSettingsRepository(userDefaults: userDefaults)
 
         let loadedPreferences = await repository.getPreferences()
 
@@ -64,14 +58,12 @@ struct UserDefaultsSettingsRepositoryTests {
 
     @Test("Corrupted data falls back to defaults")
     func corruptedDataFallsBackToDefaults() async {
-        let suiteName = "com.vonage.vera.tests.\(UUID().uuidString)"
-        defer { UserDefaults(suiteName: suiteName)?.removePersistentDomain(forName: suiteName) }
-        let userDefaults = UserDefaults(suiteName: suiteName)!
+        let userDefaults = UserDefaults.ephemeral()
 
         // Store corrupted data
         userDefaults.set("corrupted data".data(using: .utf8), forKey: "com.vonage.vera.publisherSettingsPreferences")
 
-        let repository = UserDefaultsSettingsRepository(userDefaults: UserDefaults(suiteName: suiteName)!)
+        let repository = UserDefaultsSettingsRepository(userDefaults: userDefaults)
 
         let preferences = await repository.getPreferences()
 
@@ -80,9 +72,8 @@ struct UserDefaultsSettingsRepositoryTests {
 
     @Test("Publisher emits initial value immediately")
     func publisherEmitsInitialValue() async throws {
-        let suiteName = "com.vonage.vera.tests.\(UUID().uuidString)"
-        defer { UserDefaults(suiteName: suiteName)?.removePersistentDomain(forName: suiteName) }
-        let repository = UserDefaultsSettingsRepository(userDefaults: UserDefaults(suiteName: suiteName)!)
+        let userDefaults = UserDefaults.ephemeral()
+        let repository = UserDefaultsSettingsRepository(userDefaults: userDefaults)
 
         var receivedPreferences: PublisherSettingsPreferences?
         let cancellable = repository.preferencesPublisher
@@ -100,9 +91,7 @@ struct UserDefaultsSettingsRepositoryTests {
 
     @Test("setup() seeds publisher with persisted preferences")
     func setupSeedsPublisherWithPersistedPreferences() async throws {
-        let suiteName = "com.vonage.vera.tests.\(UUID().uuidString)"
-        defer { UserDefaults(suiteName: suiteName)?.removePersistentDomain(forName: suiteName) }
-        let userDefaults = UserDefaults(suiteName: suiteName)!
+        let userDefaults = UserDefaults.ephemeral()
 
         let customPreferences = PublisherSettingsPreferences(
             videoResolution: .high,
@@ -111,7 +100,7 @@ struct UserDefaultsSettingsRepositoryTests {
         let data = try JSONEncoder().encode(customPreferences)
         userDefaults.set(data, forKey: "com.vonage.vera.publisherSettingsPreferences")
 
-        let repository = UserDefaultsSettingsRepository(userDefaults: UserDefaults(suiteName: suiteName)!)
+        let repository = UserDefaultsSettingsRepository(userDefaults: userDefaults)
         await repository.setup()
 
         var receivedPreferences: PublisherSettingsPreferences?
@@ -127,10 +116,8 @@ struct UserDefaultsSettingsRepositoryTests {
 
     @Test("save() encodes and stores in UserDefaults")
     func saveEncodesAndStores() async throws {
-        let suiteName = "com.vonage.vera.tests.\(UUID().uuidString)"
-        defer { UserDefaults(suiteName: suiteName)?.removePersistentDomain(forName: suiteName) }
-        let userDefaults = UserDefaults(suiteName: suiteName)!
-        let repository = UserDefaultsSettingsRepository(userDefaults: UserDefaults(suiteName: suiteName)!)
+        let userDefaults = UserDefaults.ephemeral()
+        let repository = UserDefaultsSettingsRepository(userDefaults: userDefaults)
 
         let customPreferences = PublisherSettingsPreferences(
             videoResolution: .low,
@@ -152,10 +139,8 @@ struct UserDefaultsSettingsRepositoryTests {
 
     @Test("opusDtxEnabled defaults to true and persists correctly")
     func opusDtxDefaultsAndPersists() async throws {
-        let suiteName = "com.vonage.vera.tests.\(UUID().uuidString)"
-        defer { UserDefaults(suiteName: suiteName)?.removePersistentDomain(forName: suiteName) }
-        let userDefaults = UserDefaults(suiteName: suiteName)!
-        let repository = UserDefaultsSettingsRepository(userDefaults: UserDefaults(suiteName: suiteName)!)
+        let userDefaults = UserDefaults.ephemeral()
+        let repository = UserDefaultsSettingsRepository(userDefaults: userDefaults)
 
         // Verify default value is true
         let defaultPreferences = await repository.getPreferences()
@@ -183,9 +168,8 @@ struct UserDefaultsSettingsRepositoryTests {
 
     @Test("save() updates subject and emits through publisher")
     func saveUpdatesSubjectAndEmits() async throws {
-        let suiteName = "com.vonage.vera.tests.\(UUID().uuidString)"
-        defer { UserDefaults(suiteName: suiteName)?.removePersistentDomain(forName: suiteName) }
-        let repository = UserDefaultsSettingsRepository(userDefaults: UserDefaults(suiteName: suiteName)!)
+        let userDefaults = UserDefaults.ephemeral()
+        let repository = UserDefaultsSettingsRepository(userDefaults: userDefaults)
 
         var emittedValues: [PublisherSettingsPreferences] = []
         let cancellable = repository.preferencesPublisher
@@ -218,11 +202,10 @@ struct UserDefaultsSettingsRepositoryTests {
 
     @Test("Saved data persists across instances")
     func savedDataPersistsAcrossInstances() async throws {
-        let suiteName = "com.vonage.vera.tests.\(UUID().uuidString)"
-        defer { UserDefaults(suiteName: suiteName)?.removePersistentDomain(forName: suiteName) }
+        let userDefaults = UserDefaults.ephemeral()
 
         // First instance - save data
-        let repository1 = UserDefaultsSettingsRepository(userDefaults: UserDefaults(suiteName: suiteName)!)
+        let repository1 = UserDefaultsSettingsRepository(userDefaults: userDefaults)
         let customPreferences = PublisherSettingsPreferences(
             videoFrameRate: .fps1,
             videoBitratePreset: .bandwidthSaver,
@@ -231,7 +214,7 @@ struct UserDefaultsSettingsRepositoryTests {
         await repository1.save(customPreferences)
 
         // Second instance - should load saved data
-        let repository2 = UserDefaultsSettingsRepository(userDefaults: UserDefaults(suiteName: suiteName)!)
+        let repository2 = UserDefaultsSettingsRepository(userDefaults: userDefaults)
         let loadedPreferences = await repository2.getPreferences()
 
         #expect(loadedPreferences == customPreferences)
@@ -241,9 +224,8 @@ struct UserDefaultsSettingsRepositoryTests {
 
     @Test("Multiple saves work correctly")
     func multipleSavesWorkCorrectly() async throws {
-        let suiteName = "com.vonage.vera.tests.\(UUID().uuidString)"
-        defer { UserDefaults(suiteName: suiteName)?.removePersistentDomain(forName: suiteName) }
-        let repository = UserDefaultsSettingsRepository(userDefaults: UserDefaults(suiteName: suiteName)!)
+        let userDefaults = UserDefaults.ephemeral()
+        let repository = UserDefaultsSettingsRepository(userDefaults: userDefaults)
 
         var emittedValues: [PublisherSettingsPreferences] = []
         let cancellable = repository.preferencesPublisher
@@ -276,10 +258,8 @@ struct UserDefaultsSettingsRepositoryTests {
 
     @Test("reset() removes data from UserDefaults")
     func resetRemovesDataFromUserDefaults() async throws {
-        let suiteName = "com.vonage.vera.tests.\(UUID().uuidString)"
-        defer { UserDefaults(suiteName: suiteName)?.removePersistentDomain(forName: suiteName) }
-        let userDefaults = UserDefaults(suiteName: suiteName)!
-        let repository = UserDefaultsSettingsRepository(userDefaults: UserDefaults(suiteName: suiteName)!)
+        let userDefaults = UserDefaults.ephemeral()
+        let repository = UserDefaultsSettingsRepository(userDefaults: userDefaults)
 
         // Save some data
         let customPreferences = PublisherSettingsPreferences(senderStatsEnabled: true)
@@ -297,9 +277,8 @@ struct UserDefaultsSettingsRepositoryTests {
 
     @Test("reset() emits default preferences")
     func resetEmitsDefaults() async throws {
-        let suiteName = "com.vonage.vera.tests.\(UUID().uuidString)"
-        defer { UserDefaults(suiteName: suiteName)?.removePersistentDomain(forName: suiteName) }
-        let repository = UserDefaultsSettingsRepository(userDefaults: UserDefaults(suiteName: suiteName)!)
+        let userDefaults = UserDefaults.ephemeral()
+        let repository = UserDefaultsSettingsRepository(userDefaults: userDefaults)
 
         var emittedValues: [PublisherSettingsPreferences] = []
         let cancellable = repository.preferencesPublisher
@@ -332,17 +311,16 @@ struct UserDefaultsSettingsRepositoryTests {
 
     @Test("After reset, new instance loads defaults")
     func afterResetNewInstanceLoadsDefaults() async throws {
-        let suiteName = "com.vonage.vera.tests.\(UUID().uuidString)"
-        defer { UserDefaults(suiteName: suiteName)?.removePersistentDomain(forName: suiteName) }
+        let userDefaults = UserDefaults.ephemeral()
 
         // First instance - save and reset
-        let repository1 = UserDefaultsSettingsRepository(userDefaults: UserDefaults(suiteName: suiteName)!)
+        let repository1 = UserDefaultsSettingsRepository(userDefaults: userDefaults)
         let customPreferences = PublisherSettingsPreferences(senderStatsEnabled: true)
         await repository1.save(customPreferences)
         await repository1.reset()
 
         // Second instance - should load defaults
-        let repository2 = UserDefaultsSettingsRepository(userDefaults: UserDefaults(suiteName: suiteName)!)
+        let repository2 = UserDefaultsSettingsRepository(userDefaults: userDefaults)
         let loadedPreferences = await repository2.getPreferences()
 
         #expect(loadedPreferences == PublisherSettingsPreferences.default)
@@ -352,9 +330,8 @@ struct UserDefaultsSettingsRepositoryTests {
 
     @Test("Multiple subscribers receive same values")
     func multipleSubscribersReceiveSameValues() async throws {
-        let suiteName = "com.vonage.vera.tests.\(UUID().uuidString)"
-        defer { UserDefaults(suiteName: suiteName)?.removePersistentDomain(forName: suiteName) }
-        let repository = UserDefaultsSettingsRepository(userDefaults: UserDefaults(suiteName: suiteName)!)
+        let userDefaults = UserDefaults.ephemeral()
+        let repository = UserDefaultsSettingsRepository(userDefaults: userDefaults)
 
         var subscriber1Values: [PublisherSettingsPreferences] = []
         var subscriber2Values: [PublisherSettingsPreferences] = []
@@ -390,9 +367,8 @@ struct UserDefaultsSettingsRepositoryTests {
 
     @Test("Publisher emits on every save")
     func publisherEmitsOnEverySave() async throws {
-        let suiteName = "com.vonage.vera.tests.\(UUID().uuidString)"
-        defer { UserDefaults(suiteName: suiteName)?.removePersistentDomain(forName: suiteName) }
-        let repository = UserDefaultsSettingsRepository(userDefaults: UserDefaults(suiteName: suiteName)!)
+        let userDefaults = UserDefaults.ephemeral()
+        let repository = UserDefaultsSettingsRepository(userDefaults: userDefaults)
 
         var emissionCount = 0
         let cancellable = repository.preferencesPublisher
@@ -420,9 +396,8 @@ struct UserDefaultsSettingsRepositoryTests {
 
     @Test("Concurrent reads and writes are safe")
     func concurrentReadsAndWritesAreSafe() async throws {
-        let suiteName = "com.vonage.vera.tests.\(UUID().uuidString)"
-        defer { UserDefaults(suiteName: suiteName)?.removePersistentDomain(forName: suiteName) }
-        let repository = UserDefaultsSettingsRepository(userDefaults: UserDefaults(suiteName: suiteName)!)
+        let userDefaults = UserDefaults.ephemeral()
+        let repository = UserDefaultsSettingsRepository(userDefaults: userDefaults)
 
         // Perform concurrent operations
         await withTaskGroup(of: Void.self) { group in
@@ -453,10 +428,8 @@ struct UserDefaultsSettingsRepositoryTests {
 
     @Test("Custom UserDefaults instance works correctly")
     func customUserDefaultsWorks() async throws {
-        let suiteName = "com.vonage.vera.tests.\(UUID().uuidString)"
-        defer { UserDefaults(suiteName: suiteName)?.removePersistentDomain(forName: suiteName) }
-        let customDefaults = UserDefaults(suiteName: suiteName)!
-        let repository = UserDefaultsSettingsRepository(userDefaults: UserDefaults(suiteName: suiteName)!)
+        let customDefaults = UserDefaults.ephemeral()
+        let repository = UserDefaultsSettingsRepository(userDefaults: customDefaults)
 
         let customPreferences = PublisherSettingsPreferences(videoResolution: .high)
         await repository.save(customPreferences)
@@ -473,9 +446,8 @@ struct UserDefaultsSettingsRepositoryTests {
 
     @Test("getPreferences returns current value synchronously")
     func getPreferencesReturnsCurrentValue() async throws {
-        let suiteName = "com.vonage.vera.tests.\(UUID().uuidString)"
-        defer { UserDefaults(suiteName: suiteName)?.removePersistentDomain(forName: suiteName) }
-        let repository = UserDefaultsSettingsRepository(userDefaults: UserDefaults(suiteName: suiteName)!)
+        let userDefaults = UserDefaults.ephemeral()
+        let repository = UserDefaultsSettingsRepository(userDefaults: userDefaults)
 
         // Initial value
         let initial = await repository.getPreferences()
@@ -487,5 +459,16 @@ struct UserDefaultsSettingsRepositoryTests {
 
         let updated = await repository.getPreferences()
         #expect(updated == customPreferences)
+    }
+}
+
+// MARK: - Helper Extensions
+
+extension UserDefaults {
+    static func ephemeral() -> UserDefaults {
+        let suiteName = "com.vonage.vera.tests.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defaults.removePersistentDomain(forName: suiteName)
+        return defaults
     }
 }

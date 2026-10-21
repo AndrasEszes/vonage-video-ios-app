@@ -24,6 +24,7 @@ public final class ArchivingFactory {
         self.sessionKeyProvider = sessionKeyProvider
     }
 
+    @MainActor
     public func makeArchivingButton(
         showAlert: @escaping (AlertItem) -> Void
     ) -> (view: some View, viewModel: ArchiveButtonViewModel) {
@@ -38,6 +39,7 @@ public final class ArchivingFactory {
         return (makeArchivingButton(viewModel: viewModel), viewModel)
     }
 
+    @MainActor
     public func makeArchivingButton(
         viewModel: ArchiveButtonViewModel
     ) -> some View {

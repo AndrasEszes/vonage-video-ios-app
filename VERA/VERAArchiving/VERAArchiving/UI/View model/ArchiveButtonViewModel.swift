@@ -7,6 +7,7 @@ import Foundation
 import Observation
 import VERADomain
 
+@MainActor
 @Observable
 public final class ArchiveButtonViewModel {
     @ObservationIgnored

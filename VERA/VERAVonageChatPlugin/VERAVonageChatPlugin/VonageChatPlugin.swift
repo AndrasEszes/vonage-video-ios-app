@@ -21,7 +21,7 @@ import VERAVonage
 /// - Important: Set `channel` before sending messages; otherwise throws ``VonageChatPlugin/Error/missingChannel``.
 /// - SeeAlso: ``VonagePlugin``, ``VonageSignalHandler``, ``VonageSignalEmitter``, ``VonageSignal``, ``OutgoingSignal``
 @MainActor
-public final class VonageChatPlugin: VonagePlugin, VonageSignalHandler, VonageSignalEmitter {
+public final class VonageChatPlugin: VonagePlugin, @preconcurrency VonageSignalHandler, VonageSignalEmitter {
 
     private static let logger = Logger(subsystem: "com.vonage.vera", category: "Chat")
 
@@ -38,13 +38,15 @@ public final class VonageChatPlugin: VonagePlugin, VonageSignalHandler, VonageSi
     }
 
     /// The channel used to emit signals to peers; injected by the call façade.
-    public weak var channel: (any VERAVonage.VonageSignalChannel)?
+    ///
+    /// The façade assigns it from its nonisolated `connect()`, so it stays outside the main actor.
+    nonisolated(unsafe) public weak var channel: (any VERAVonage.VonageSignalChannel)?
     /// The current username associated with this call.
     private var username: String = ""
     /// Repository used to persist and observe chat messages.
     public let repository: ChatMessagesRepository
     /// Stable identifier for plugin registration and diagnostics.
-    public var pluginIdentifier: String { String(describing: type(of: self)) }
+    nonisolated public var pluginIdentifier: String { String(describing: type(of: self)) }
 
     /// Creates a chat plugin.
     ///

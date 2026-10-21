@@ -6,7 +6,7 @@ import SwiftUI
 import VERACommonUI
 import VERADomain
 
-public struct WaitingRoomState: Equatable, Sendable {
+public struct WaitingRoomState: Equatable {
     public let roomName: String
     public let isMicrophoneEnabled: Bool
     public let isCameraEnabled: Bool
@@ -48,6 +48,7 @@ public struct WaitingRoomState: Equatable, Sendable {
         self.publisher = publisher
     }
 
+    @MainActor
     public static let initial = WaitingRoomState(
         roomName: "",
         isMicrophoneEnabled: false,

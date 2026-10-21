@@ -9,6 +9,7 @@ import VERAMeetingRoom
 import VERATestHelpers
 
 @Suite("Connect to room use case tests")
+@MainActor
 struct ConnectToRoomUseCaseTests {
 
     @Test
@@ -18,7 +19,7 @@ struct ConnectToRoomUseCaseTests {
         let mockCall = MockCall()
         sessionRepository.currentCall = mockCall
 
-        let sut = makeSUT(sessionRepository: sessionRepository)
+        let sut = makeSUT(sessionRepository: sessionRepository ?? makeMockSessionRepository())
 
         _ = try await sut(roomName: "heart-of-gold")
 
@@ -31,7 +32,7 @@ struct ConnectToRoomUseCaseTests {
         let sessionRepository = makeMockSessionRepository()
         sessionRepository.createSessionError = MockError.sessionCreationFailed
 
-        let sut = makeSUT(sessionRepository: sessionRepository)
+        let sut = makeSUT(sessionRepository: sessionRepository ?? makeMockSessionRepository())
 
         await #expect(throws: MockError.self) {
             try await sut(roomName: "heart-of-gold")
@@ -45,8 +46,8 @@ struct ConnectToRoomUseCaseTests {
     }
 
     private func makeSUT(
-        sessionRepository: SessionRepository = makeMockSessionRepository()
+        sessionRepository: SessionRepository? = nil
     ) -> ConnectToRoomUseCase {
-        DefaultConnectToRoomUseCase(sessionRepository: sessionRepository)
+        DefaultConnectToRoomUseCase(sessionRepository: sessionRepository ?? makeMockSessionRepository())
     }
 }

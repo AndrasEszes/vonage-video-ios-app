@@ -12,6 +12,7 @@ import VERAMeetingRoom
 import VERATestHelpers
 
 @Suite("MeetingRoomViewModel tests")
+@MainActor
 struct MeetingRoomViewModelTests {
 
     enum Error: Swift.Error {
@@ -1450,8 +1451,7 @@ struct MeetingRoomViewModelTests {
             makeMockCheckMicrophoneAuthorizationStatusUseCase(),
         checkCameraAuthorizationStatusUseCase: CheckCameraAuthorizationStatusUseCase =
             makeMockCheckCameraAuthorizationStatusUseCase(),
-        currentCallParticipantsRepository: CurrentCallParticipantsRepository =
-            makeMockCurrentCallParticipantsRepository(),
+        currentCallParticipantsRepository: CurrentCallParticipantsRepository? = nil,
         configuration: MeetingRoomConfiguration = MeetingRoomConfiguration(),
         noiseSuppressionStatusDataSource: NoiseSuppressionStatusDataSource = makeMockNoiseSuppressionStatusDataSource(),
         pinnedParticipantsDataSource: PinnedParticipantsDataSource = DefaultPinnedParticipantsDataSource(),
@@ -1467,7 +1467,8 @@ struct MeetingRoomViewModelTests {
             disconnectRoomUseCase: disconnectRoomUseCase,
             checkMicrophoneAuthorizationStatusUseCase: checkMicrophoneAuthorizationStatusUseCase,
             checkCameraAuthorizationStatusUseCase: checkCameraAuthorizationStatusUseCase,
-            currentCallParticipantsRepository: currentCallParticipantsRepository,
+            currentCallParticipantsRepository: currentCallParticipantsRepository
+                ?? makeMockCurrentCallParticipantsRepository(),
             captionsStatusDataSource: NullCaptionsStatusDataSource(),
             configuration: configuration,
             meetingRoomNavigation: MockMeetingRoomNavigation(actionHandler, roomName: roomName),

@@ -62,11 +62,13 @@ public actor UserDefaultsSettingsRepository: PublisherSettingsRepository {
 
     /// Saves the given preferences to UserDefaults and notifies observers.
     ///
+    /// Observers are only notified once the preferences are persisted, so the
+    /// in-memory state never diverges from what is restored on the next launch.
+    ///
     /// - Parameter preferences: The preferences to persist.
     public func save(_ preferences: PublisherSettingsPreferences) async {
-        if let data = try? JSONEncoder().encode(preferences) {
-            userDefaults.set(data, forKey: Self.storeKey)
-        }
+        guard let data = try? JSONEncoder().encode(preferences) else { return }
+        userDefaults.set(data, forKey: Self.storeKey)
         subject.send(preferences)
     }
 
@@ -74,10 +76,7 @@ public actor UserDefaultsSettingsRepository: PublisherSettingsRepository {
         var preferences = Self.load(from: userDefaults) ?? subject.value
         guard preferences.cameraPosition != position else { return }
         preferences.cameraPosition = position
-        if let data = try? JSONEncoder().encode(preferences) {
-            userDefaults.set(data, forKey: Self.storeKey)
-        }
-        subject.send(preferences)
+        await save(preferences)
     }
 
     public func saveAdvancedNoiseSuppression(_ enabled: Bool) async {

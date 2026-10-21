@@ -24,10 +24,17 @@ public final class ArchivingFactory {
         self.sessionKeyProvider = sessionKeyProvider
     }
 
+    /// Makes the start/stop control for the given archive kind.
+    ///
+    /// - Parameters:
+    ///   - kind: Whether the control drives the recording or the post-call transcription.
+    ///   - showAlert: Presents the start/stop confirmation dialogs.
     public func makeArchivingButton(
+        kind: ArchiveKind = .recording,
         showAlert: @escaping (AlertItem) -> Void
     ) -> (view: some View, viewModel: ArchiveButtonViewModel) {
         let viewModel = ArchiveButtonViewModel(
+            kind: kind,
             sessionKeyProvider: sessionKeyProvider,
             startArchivingUseCase: DefaultStartArchivingUseCase(
                 archivingDataSource: archivingDataSource),

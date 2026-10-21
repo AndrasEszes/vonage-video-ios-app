@@ -4,7 +4,6 @@
 
 import Combine
 import Foundation
-import VERADomain
 
 /// Default implementation of ReactionsRepository.
 ///
@@ -15,12 +14,12 @@ public actor DefaultReactionsRepository: ReactionsRepository {
 
     // MARK: - Private Properties
 
-    private nonisolated let reactionSubject = EventRelay<EmojiReaction, Never>()
+    private nonisolated let reactionSubject = PassthroughSubject<EmojiReaction, Never>()
 
     // MARK: - ReactionsObserver
 
     public nonisolated var reactionReceived: AnyPublisher<EmojiReaction, Never> {
-        reactionSubject.publisher
+        reactionSubject.eraseToAnyPublisher()
     }
 
     // MARK: - Initialization

@@ -14,12 +14,12 @@ public actor DefaultCaptionsRepository: CaptionsRepository {
 
     // MARK: - Private Properties
 
-    private nonisolated let captionsSubject = CurrentValueRelay<[CaptionItem], Never>([])
+    private nonisolated let captionsSubject = CurrentValueSubject<[CaptionItem], Never>([])
 
     // MARK: - CaptionsObserver
 
     public nonisolated var captionsReceived: AnyPublisher<[CaptionItem], Never> {
-        captionsSubject.publisher
+        captionsSubject.eraseToAnyPublisher()
     }
 
     // MARK: - Initialization

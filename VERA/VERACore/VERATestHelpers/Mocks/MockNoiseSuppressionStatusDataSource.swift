@@ -11,13 +11,12 @@ public func makeMockNoiseSuppressionStatusDataSource() -> NoiseSuppressionStatus
 
 public final class MockNoiseSuppressionStatusDataSource: NoiseSuppressionStatusDataSource {
 
-    public let _noiseSuppressionState = CurrentValueRelay<NoiseSuppressionState, Never>(.idle)
+    public var _noiseSuppressionState = CurrentValueSubject<NoiseSuppressionState, Never>(.idle)
 
-    public var noiseSuppressionState: AnyPublisher<NoiseSuppressionState, Never> {
-        _noiseSuppressionState.publisher
-    }
+    public lazy var noiseSuppressionState: AnyPublisher<NoiseSuppressionState, Never> =
+        _noiseSuppressionState.eraseToAnyPublisher()
 
     public func set(state: VERADomain.NoiseSuppressionState) {
-        _noiseSuppressionState.send(state)
+        _noiseSuppressionState.value = state
     }
 }

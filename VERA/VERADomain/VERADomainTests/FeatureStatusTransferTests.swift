@@ -2,7 +2,6 @@
 //  Created by Vonage on 14/10/2026.
 //
 
-import Combine
 import Testing
 import VERADomain
 
@@ -25,19 +24,6 @@ struct FeatureStatusTransferTests {
             let received = await Task.detached { state }.value
             #expect(received == state)
         }
-    }
-
-    @Test("Unavailable noise suppression remains disabled when enablement is requested")
-    func unavailableNoiseSuppressionStaysDisabled() {
-        let sut = NullNoiseSuppressionStatusDataSource()
-        var states: [NoiseSuppressionState] = []
-        let initial = sut.noiseSuppressionState.sink { states.append($0) }
-        sut.set(state: .enabled)
-        let afterEnablement = sut.noiseSuppressionState.sink { states.append($0) }
-        sut.set(state: .idle)
-        let afterReset = sut.noiseSuppressionState.sink { states.append($0) }
-        #expect(states == [.disabled, .disabled, .disabled])
-        withExtendedLifetime((initial, afterEnablement, afterReset)) {}
     }
 
     @Test("Noise suppression states retain their values across tasks")

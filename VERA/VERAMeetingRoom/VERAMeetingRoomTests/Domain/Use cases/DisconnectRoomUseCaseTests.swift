@@ -16,7 +16,7 @@ struct DisconnectRoomUseCaseTests {
     func disconnectsCallsCallDisconnect() async throws {
         let sessionRepository = makeMockSessionRepository()
 
-        let sut = makeSUT(sessionRepository: sessionRepository ?? makeMockSessionRepository())
+        let sut = makeSUT(sessionRepository: sessionRepository)
 
         let call = MockCall()
         sessionRepository.currentCall = call

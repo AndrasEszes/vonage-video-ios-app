@@ -15,6 +15,8 @@ final class PictureInPictureVideoRenderer: UIView, OTVideoRender {
     let inlineDisplayLayer: AVSampleBufferDisplayLayer
     private nonisolated let frames: FrameState
 
+    /// Only the currently selected feed holds the PiP layer. The main actor owns
+    /// this reference; FrameState synchronizes its renderer with SDK frame delivery.
     var pipBufferDisplayLayer: AVSampleBufferDisplayLayer? {
         didSet { frames.setPiPRenderer(pipBufferDisplayLayer?.sampleBufferRenderer) }
     }

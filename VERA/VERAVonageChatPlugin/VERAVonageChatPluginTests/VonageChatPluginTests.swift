@@ -97,9 +97,9 @@ struct VonageChatPluginTests {
     // MARK: SUT
 
     func makeSUT(
-        repository: ChatMessagesRepository = SpyChatMessagesRepository()
+        repository: ChatMessagesRepository? = nil
     ) -> VonageChatPlugin {
-        VonageChatPlugin(repository: repository)
+        VonageChatPlugin(repository: repository ?? SpyChatMessagesRepository())
     }
 }
 

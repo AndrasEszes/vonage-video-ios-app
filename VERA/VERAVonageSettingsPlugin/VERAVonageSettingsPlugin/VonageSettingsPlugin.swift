@@ -50,6 +50,8 @@ public final class VonageSettingsPlugin: VonagePlugin, VonagePluginCallHolder {
     private var updateLiveSettingsTask: Task<Void, Never>?
     /// Invalidates live-update tasks whose repository emissions arrive out of order.
     private var liveSettingsGeneration = 0
+    /// Latest captions translation update; each one awaits the previous so the newest choice wins.
+    private var captionsTranslationTask: Task<Void, Never>?
     /// Orders stats writes, final clear, and subsequent source subscriptions.
     private let statsForwarding: StatsForwardingLifecycle
 
@@ -155,6 +157,23 @@ public final class VonageSettingsPlugin: VonagePlugin, VonagePluginCallHolder {
             }
             .store(in: &cancellables)
 
+        // Apply the captions translation language to remote subscribers: the current value on
+        // subscription, then every change. It is a subscriber setting, so it never republishes.
+        settingsRepository.preferencesPublisher
+            .map(\.captionsTranslationLanguage)
+            .removeDuplicates()
+            .sink { [weak self] languageCode in
+                guard let self else { return }
+                let previous = self.captionsTranslationTask
+                self.captionsTranslationTask = Task { [weak call = self.call] in
+                    await previous?.value
+                    guard !Task.isCancelled else { return }
+                    await (call as? any CaptionsTranslationControllable)?
+                        .setCaptionsTranslationLanguage(languageCode)
+                }
+            }
+            .store(in: &cancellables)
+
         // Source changes are queued behind any previous forwarding/clear operation.
         if let publisher = call?.networkStatsPublisher {
             let start = await statsForwarding.start(publisher)
@@ -168,6 +187,8 @@ public final class VonageSettingsPlugin: VonagePlugin, VonagePluginCallHolder {
         liveSettingsGeneration += 1
         updateLiveSettingsTask?.cancel()
         updateLiveSettingsTask = nil
+        captionsTranslationTask?.cancel()
+        captionsTranslationTask = nil
         cancellables.removeAll()
         let stop = await statsForwarding.stop()
         await stop.value

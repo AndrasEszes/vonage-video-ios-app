@@ -265,7 +265,8 @@ final class DependencyContainer {
 
         lazy var settingsFactory = SettingsFactory(
             repository: settingsRepository,
-            statsDataSource: InMemoryStatsRepository())
+            statsDataSource: InMemoryStatsRepository(),
+            isCaptionsTranslationAvailable: appConfig.meetingRoomSettings.allowCaptions)
     #endif
 
     // MARK: - AudioEffects feature (waiting room)

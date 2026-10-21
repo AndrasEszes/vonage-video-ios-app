@@ -355,7 +355,8 @@ final class MeetingRoomSDKContainer {
 
     lazy var settingsFactory = SettingsFactory(
         repository: settingsRepository,
-        statsDataSource: statsRepository
+        statsDataSource: statsRepository,
+        isCaptionsTranslationAvailable: enabledFeatures.contains(.captions)
     )
 
     lazy var feedbackFactory = FeedbackFactory(

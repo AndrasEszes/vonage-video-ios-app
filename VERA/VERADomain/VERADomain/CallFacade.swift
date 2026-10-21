@@ -181,6 +181,14 @@ public protocol AudioMuteControllable: AnyObject {
     func muteLocalAudio(_ isMuted: Bool)
 }
 
+/// Optional per-user control for translating remote participants' captions.
+///
+/// The value is a BCP-47 language code, or `nil` to receive captions in the original spoken language.
+/// It applies to remote participants only; the local user's own captions stay untranslated.
+public protocol CaptionsTranslationControllable: AnyObject {
+    func setCaptionsTranslationLanguage(_ languageCode: String?) async
+}
+
 /// Controls local media publishing and mute state.
 ///
 /// Conformers should reflect changes via their ``SessionStatePublisherProvider/statePublisher``.

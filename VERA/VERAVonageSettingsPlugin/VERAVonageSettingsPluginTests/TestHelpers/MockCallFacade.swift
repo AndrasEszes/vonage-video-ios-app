@@ -48,6 +48,7 @@ final class MockCallFacade: CallFacade, @unchecked Sendable {
     var lastAppliedSettings: PublisherAdvancedSettings?
     var updateLivePublisherAdvancedSettingsCallCount = 0
     var lastLiveSettings: PublisherAdvancedSettings?
+    let captionsTranslationRecorder = CaptionsTranslationRecorder()
 
     func connect() async throws {}
     func disconnect() async throws {}
@@ -83,5 +84,17 @@ final class MockCallFacade: CallFacade, @unchecked Sendable {
     func updateLivePublisherAdvancedSettings(_ settings: PublisherAdvancedSettings) async {
         updateLivePublisherAdvancedSettingsCallCount += 1
         lastLiveSettings = settings
+    }
+}
+
+/// Records captions translation updates sent by the settings plugin, in order.
+final class CaptionsTranslationRecorder: @unchecked Sendable {
+    private(set) var languages: [String?] = []
+    func record(_ languageCode: String?) { languages.append(languageCode) }
+}
+
+extension MockCallFacade: CaptionsTranslationControllable {
+    func setCaptionsTranslationLanguage(_ languageCode: String?) async {
+        captionsTranslationRecorder.record(languageCode)
     }
 }

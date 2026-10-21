@@ -158,6 +158,26 @@ struct VonageSettingsPluginTests {
         #expect(mocks.call.applyPublisherAdvancedSettingsCallCount == initialCallCount)
     }
 
+    @Test("Captions translation language reaches the call in order without republishing")
+    func captionsTranslationLanguageIsAppliedInOrder() async throws {
+        let (sut, mocks) = makeSUT()
+        sut.call = mocks.call
+
+        try await sut.callDidStart([:])
+        await delay()
+        let initialApplyCount = mocks.call.applyPublisherAdvancedSettingsCallCount
+        let initialLiveCount = mocks.call.updateLivePublisherAdvancedSettingsCallCount
+
+        await mocks.repository.updatePreferences { $0.captionsTranslationLanguage = "es-ES" }
+        await mocks.repository.updatePreferences { $0.captionsTranslationLanguage = "fr-FR" }
+        await mocks.repository.updatePreferences { $0.captionsTranslationLanguage = nil }
+        await delay()
+
+        #expect(mocks.call.captionsTranslationRecorder.languages == [nil, "es-ES", "fr-FR", nil])
+        #expect(mocks.call.applyPublisherAdvancedSettingsCallCount == initialApplyCount)
+        #expect(mocks.call.updateLivePublisherAdvancedSettingsCallCount == initialLiveCount)
+    }
+
     @Test("Initial preferences do not update the live publisher")
     func initialPreferencesDoNotTriggerLiveUpdate() async throws {
         let (sut, mocks) = makeSUT()

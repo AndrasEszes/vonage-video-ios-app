@@ -110,6 +110,15 @@ appId: ${APP_ID}
 # Screenshot: Audio section with all controls locked
 - takeScreenshot: 02-settings-meeting-room-audio-section-locked
 
+# Captions Section - stays editable in a call because the language applies immediately
+- scrollUntilVisible:
+    element:
+      id: "settings-captions-language-picker"
+    direction: DOWN
+- assertVisible:
+    id: "settings-captions-language-picker"
+    enabled: true
+
 # Scroll more to reveal General section
 - swipe:
     direction: "UP"

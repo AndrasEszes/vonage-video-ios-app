@@ -95,6 +95,8 @@ public final class MeetingRoomViewModel {
     /// Tracks the fallback disconnection task so it can be cancelled on normal call end.
     @MainActor @ObservationIgnored private(set) var disconnectionTask: Task<Void, Never>?
 
+    @MainActor @ObservationIgnored private var isSessionInterrupted = false
+
     @ObservationIgnored
     private let layoutPublisher = CurrentValueSubject<MeetingRoomLayout, Never>(.activeSpeaker)
     @ObservationIgnored
@@ -103,6 +105,8 @@ public final class MeetingRoomViewModel {
     private let callStatePublisher = CurrentValueSubject<CallState, Never>(.idle)
     @ObservationIgnored
     private let archivingPublisher = CurrentValueSubject<ArchivingState, Never>(.idle)
+    @ObservationIgnored
+    private let transcriptionPublisher = CurrentValueSubject<ArchivingState, Never>(.idle)
     @ObservationIgnored
     private let noiseSuppressionPublisher = CurrentValueSubject<NoiseSuppressionState, Never>(.idle)
 
@@ -341,16 +345,17 @@ extension MeetingRoomViewModel {
             }
         }
 
-        Publishers.CombineLatest(
+        Publishers.CombineLatest3(
             Publishers.CombineLatest4(
                 sortedParticipantsPublisher,
                 sessionStatePublisher,
                 callStatePublisher,
                 archivingPublisher
             ),
+            transcriptionPublisher,
             noiseSuppressionPublisher
         )
-        .map { [weak self] state, noiseSuppressionState in
+        .map { [weak self] state, transcriptionState, noiseSuppressionState in
             MainActor.assumeIsolated {
                 let (participantsState, sessionState, callState, archivingState) = state
 
@@ -370,6 +375,7 @@ extension MeetingRoomViewModel {
                     showParticipantList: self.configuration.showParticipantList,
                     callState: callState,
                     archivingState: archivingState,
+                    transcriptionState: transcriptionState,
                     noiseSuppressionState: noiseSuppressionState
                 )
             }
@@ -425,9 +431,18 @@ extension MeetingRoomViewModel {
             .store(in: &cancellables)
 
         call.archivingState
+            .removeDuplicates()
             .dropFirst()
             .sinkOnMainActor { [weak self] archivingState in
                 self?.handleArchivingStateChange(archivingState)
+            }
+            .store(in: &cancellables)
+
+        call.transcriptionState
+            .removeDuplicates()
+            .dropFirst()
+            .sink { [weak self] transcriptionState in
+                self?.handleTranscriptionStateChange(transcriptionState)
             }
             .store(in: &cancellables)
 
@@ -481,13 +496,37 @@ extension MeetingRoomViewModel {
         }
     }
 
+    fileprivate func handleTranscriptionStateChange(_ transcriptionState: ArchivingState) {
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            self.transcriptionPublisher.value = transcriptionState
+            switch transcriptionState {
+            case .idle:
+                // A reset during interruption or teardown is not a transcription-stop notification.
+                guard !self.isSessionInterrupted,
+                    self.callStatePublisher.value != .disconnecting,
+                    self.callStatePublisher.value != .disconnected
+                else { return }
+                self.toast = .init(
+                    message: String(localized: "Session transcription stopped", bundle: .module),
+                    mode: .info)
+            case .archiving:
+                self.toast = .init(
+                    message: String(localized: "Session transcription started", bundle: .module),
+                    mode: .info)
+            }
+        }
+    }
+
     fileprivate func handleEvents(_ event: SessionEvent) {
         switch event {
         case .didBeginReconnecting:
+            self.isSessionInterrupted = true
             self.toast = .init(
                 message: String(localized: "Session did drop, started reconnection", bundle: .module),
                 mode: .warning)
         case .didReconnect:
+            self.isSessionInterrupted = false
             self.toast = .init(
                 message: String(localized: "Session did reconnect", bundle: .module),
                 mode: .info)
@@ -500,6 +539,7 @@ extension MeetingRoomViewModel {
         case .sessionFailure(let error):
             self.toast = .init(message: error.localizedDescription, mode: .failure)
         case .disconnected:
+            self.isSessionInterrupted = true
             self.toast = .init(
                 message: String(localized: "Session did disconnect", bundle: .module),
                 mode: .failure)

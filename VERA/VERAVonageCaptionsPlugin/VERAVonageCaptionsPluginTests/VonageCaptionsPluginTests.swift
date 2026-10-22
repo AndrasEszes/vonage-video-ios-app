@@ -480,6 +480,11 @@ private final class MockCallFacade: CallFacade {
         _archivingState.eraseToAnyPublisher()
     }
 
+    var _transcriptionState = CurrentValueSubject<ArchivingState, Never>(ArchivingState.idle)
+    var transcriptionState: AnyPublisher<ArchivingState, Never> {
+        _transcriptionState.eraseToAnyPublisher()
+    }
+
     let _captionsPublisher = EventRelay<[CaptionItem], Never>()
     let captionSubscriptions = SubscriptionCounter()
 

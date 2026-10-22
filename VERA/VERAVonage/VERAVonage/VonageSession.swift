@@ -71,12 +71,12 @@ open class VonageSession: NSObject, VonageSignalChannel {
     /// - Parameter signal: An ``VonageSignal`` containing the signal type and optional payload.
     var onSessionSignal: ((VonageSignal) -> Void)?
 
-    /// Called when the session recording begins.
+    /// Called when a session archive (recording or transcription) begins.
     ///
-    /// - Parameter Archive ID.
-    var onArchiveStarted: ((String) -> Void)?
+    /// - Parameters: Archive ID and the optional archive name.
+    var onArchiveStarted: ((String, String?) -> Void)?
 
-    /// Called when the session recording stops.
+    /// Called when a session archive (recording or transcription) stops.
     ///
     /// - Parameter Archive ID.
     var onArchiveStopped: ((String) -> Void)?
@@ -336,13 +336,13 @@ open class VonageSession: NSObject, VonageSignalChannel {
     ///   - archiveId: A unique identifier for this archive. Use this ID to stop the archive.
     ///   - name: An optional name for the archive.
     ///
-    /// Forwards the archive ID to ``onArchiveStarted``.
+    /// Forwards the archive ID and name to ``onArchiveStarted``.
     public func session(
         _ session: OTSession,
         archiveStartedWithId archiveId: String,
         name: String?
     ) {
-        onArchiveStarted?(archiveId)
+        onArchiveStarted?(archiveId, name)
     }
 
     /// Vonage session delegate method called when archiving stops.

@@ -39,6 +39,9 @@ public final class E2ECallFacade: CallFacade, AudioMuteControllable {
     private let archivingStateSubject = CurrentValueSubject<ArchivingState, Never>(.idle)
     public lazy var archivingState = archivingStateSubject.eraseToAnyPublisher()
 
+    private let transcriptionStateSubject = CurrentValueSubject<ArchivingState, Never>(.idle)
+    public lazy var transcriptionState = transcriptionStateSubject.eraseToAnyPublisher()
+
     private let captionsSubject = CurrentValueSubject<[CaptionItem], Never>([])
     public lazy var captionsPublisher = captionsSubject.eraseToAnyPublisher()
 
@@ -203,18 +206,32 @@ public final class E2ECallFacade: CallFacade, AudioMuteControllable {
 
     private func observeArchivingEvents() {
         NotificationCenter.default.publisher(for: E2EArchivingEvents.didStart)
-            .compactMap { @Sendable in $0.object as? String }
-            .sinkOnMainActor { [weak self] archiveId in
-                self?.archivingStateSubject.send(.archiving(archiveId))
+            .compactMap { @Sendable notification -> (ArchiveKind?, String)? in
+                guard let archiveId = notification.object as? String else { return nil }
+                return (notification.userInfo?[E2EArchivingEvents.kindKey] as? ArchiveKind, archiveId)
+            }
+            .sinkOnMainActor { [weak self] kind, archiveId in
+                self?.archivingSubject(for: kind).send(.archiving(archiveId))
             }
             .store(in: &cancellables)
 
         NotificationCenter.default.publisher(for: E2EArchivingEvents.didStop)
-            .map { @Sendable _ in () }
-            .sinkOnMainActor { [weak self] _ in
-                self?.archivingStateSubject.send(.idle)
+            .map { @Sendable notification in
+                notification.userInfo?[E2EArchivingEvents.kindKey] as? ArchiveKind
+            }
+            .sinkOnMainActor { [weak self] kind in
+                self?.archivingSubject(for: kind).send(.idle)
             }
             .store(in: &cancellables)
+    }
+
+    private func archivingSubject(
+        for kind: ArchiveKind?
+    ) -> CurrentValueSubject<ArchivingState, Never> {
+        switch kind {
+        case .transcription: transcriptionStateSubject
+        case .recording, nil: archivingStateSubject
+        }
     }
 
     public func forceMuteParticipant(id: String) async throws {

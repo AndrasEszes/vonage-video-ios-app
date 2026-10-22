@@ -15,7 +15,7 @@ on:
       - 'Tests/ConsumerCompatibility/**'
       - '.github/workflows/ci.yml'
   pull_request:
-    branches: [ main, develop , 'czoli1976/VIDSOL-000-swift6-stack-*' ]
+    branches: [ main, develop ]
     paths:
       - 'VERA/**'
       - 'Package.swift'

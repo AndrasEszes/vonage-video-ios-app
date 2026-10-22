@@ -127,6 +127,50 @@ struct VonageCaptionsPluginTests {
         try await sut.callDidEnd()
     }
 
+    @Test("Repeated starts keep one live subscription pair")
+    func repeatedStartsKeepOneSubscriptionPair() async throws {
+        let (sut, mocks) = makeSUT()
+        sut.call = mocks.call
+        for _ in 0..<3 { try await sut.callDidStart([:]) }
+        #expect(mocks.call.captionSubscriptions.activeCount == 1)
+        #expect(mocks.statusDataSource.subscriptions.activeCount == 1)
+        let captions = [CaptionItem(speakerName: "Alice", text: "Still listening")]
+        mocks.call._captionsPublisher.send(captions)
+        try await waitUntil { mocks.repository.lastCaptions == captions }
+        try await sut.callDidEnd()
+        #expect(mocks.call.captionSubscriptions.activeCount == 0)
+        #expect(mocks.statusDataSource.subscriptions.activeCount == 0)
+    }
+
+    @Test("Restart joins an in-flight write before installing replacement observers", .timeLimit(.minutes(1)))
+    func repeatedStartWhileCaptionWriteIsSuspended() async throws {
+        let (_, mocks) = makeSUT()
+        let writer = BlockingCaptionsWriter()
+        let sut = VonageCaptionsPlugin(
+            captionsStatusDataSource: mocks.statusDataSource, captionsRepository: writer)
+        sut.call = mocks.call
+        try await sut.callDidStart([:])
+        let first = [CaptionItem(speakerName: "Alice", text: "First")]
+        mocks.call._captionsPublisher.send(first)
+        await writer.waitForBlockedWrite()
+        let restart = Task { try await sut.callDidStart([:]) }
+        await writer.waitForCancellation()
+        #expect(mocks.call.captionSubscriptions.activeCount == 0)
+        #expect(mocks.statusDataSource.subscriptions.activeCount == 0)
+        await writer.releaseBlockedWrite()
+        try await restart.value
+        #expect(mocks.call.captionSubscriptions.activeCount == 1)
+        #expect(mocks.statusDataSource.subscriptions.activeCount == 1)
+        let second = [CaptionItem(speakerName: "Bob", text: "Second")]
+        mocks.call._captionsPublisher.send(second)
+        await writer.waitForUpdates(2)
+        try await sut.callDidEnd()
+        #expect(await writer.updates == [first, second, []])
+        #expect(await writer.maximumConcurrentWrites == 1)
+        #expect(mocks.call.captionSubscriptions.activeCount == 0)
+        #expect(mocks.statusDataSource.subscriptions.activeCount == 0)
+    }
+
     // MARK: - Call Did End
 
     @Test("callDidEnd resets captions status data source")
@@ -362,8 +406,13 @@ private final class SpyCaptionsStatusDataSource: CaptionsStatusDataSource, @unch
     private let lock = NSLock()
     private var resets = 0
 
+    let subscriptions = SubscriptionCounter()
+
     var captionsState: AnyPublisher<CaptionsState, Never> {
-        subject.publisher
+        subject.publisher.handleEvents(
+            receiveSubscription: { [subscriptions] _ in subscriptions.started() },
+            receiveCancel: { [subscriptions] in subscriptions.ended() }
+        ).eraseToAnyPublisher()
     }
 
     var resetCallCount: Int { lock.withLock { resets } }
@@ -431,9 +480,19 @@ private final class MockCallFacade: CallFacade {
         _archivingState.eraseToAnyPublisher()
     }
 
+    var _transcriptionState = CurrentValueSubject<ArchivingState, Never>(ArchivingState.idle)
+    var transcriptionState: AnyPublisher<ArchivingState, Never> {
+        _transcriptionState.eraseToAnyPublisher()
+    }
+
     let _captionsPublisher = EventRelay<[CaptionItem], Never>()
+    let captionSubscriptions = SubscriptionCounter()
+
     var captionsPublisher: AnyPublisher<[CaptionItem], Never> {
-        _captionsPublisher.publisher
+        _captionsPublisher.publisher.handleEvents(
+            receiveSubscription: { [captionSubscriptions] _ in captionSubscriptions.started() },
+            receiveCancel: { [captionSubscriptions] in captionSubscriptions.ended() }
+        ).eraseToAnyPublisher()
     }
 
     var recordedActions: [CallActions] = []
@@ -535,4 +594,13 @@ private actor BlockingCaptionsWriter: CaptionsWriter {
         guard updates.count < count else { return }
         await withCheckedContinuation { updateWaiters.append((count, $0)) }
     }
+}
+
+/// Tracks actual Combine subscription lifetimes across repeated lifecycle notifications.
+private final class SubscriptionCounter: @unchecked Sendable {
+    private let lock = NSLock()
+    private var count = 0
+    var activeCount: Int { lock.withLock { count } }
+    func started() { lock.withLock { count += 1 } }
+    func ended() { lock.withLock { count -= 1 } }
 }

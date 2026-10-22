@@ -18,16 +18,36 @@ public enum CaptionsTranslationLanguage {
         "th-TH", "uk-UA", "vi-VN", "zu-ZA",
     ]
 
-    /// Localized language name (native equivalent of Web `Intl.DisplayNames`), falling back to the code.
+    /// Scottish and Welsh English use non-standard codes that ICU cannot name, so they come from the
+    /// module's string catalog (in the current UI language) instead of `Locale`.
+    private static let dialectNames = [
+        "en-AB": "English (Scotland)",
+        "en-WL": "English (Wales)",
+    ]
+
+    /// Localized language name with its first letter capitalized (native equivalent of Web
+    /// `Intl.DisplayNames`), falling back to the code. ICU returns lowercase names in some
+    /// languages, e.g. "español (España)".
     public static func displayName(for code: String, locale: Locale = .current) -> String {
-        locale.localizedString(forIdentifier: code) ?? code
+        let name = dialectNames[code]?.localized ?? locale.localizedString(forIdentifier: code) ?? code
+        return name.prefix(1).uppercased(with: locale) + name.dropFirst()
     }
 
-    /// Supported codes ordered by their localized name so the picker is easy to scan.
-    public static func sortedCodes(locale: Locale = .current) -> [String] {
-        supportedCodes.sorted {
-            displayName(for: $0, locale: locale).localizedStandardCompare(displayName(for: $1, locale: locale))
-                == .orderedAscending
-        }
+    /// A picker row: a supported code and its localized name.
+    struct Option: Equatable {
+        let code: String
+        let name: String
     }
+
+    /// Supported languages ordered by their localized name so the picker is easy to scan.
+    ///
+    /// Each name is resolved once and then sorted, so the sort itself does no locale lookups.
+    static func options(locale: Locale = .current) -> [Option] {
+        supportedCodes
+            .map { Option(code: $0, name: displayName(for: $0, locale: locale)) }
+            .sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+    }
+
+    /// Options for the current locale, built once: the picker reads them on every view update.
+    static let currentLocaleOptions = options()
 }

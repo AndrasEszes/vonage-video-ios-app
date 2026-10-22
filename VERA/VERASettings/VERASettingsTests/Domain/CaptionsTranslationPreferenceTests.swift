@@ -38,10 +38,69 @@ struct CaptionsTranslationPreferenceTests {
 
         #expect(codes.count == 54)
         #expect(Set(codes).count == codes.count)
-        #expect(Set(CaptionsTranslationLanguage.sortedCodes(locale: Locale(identifier: "en"))) == Set(codes))
+        #expect(Set(CaptionsTranslationLanguage.options(locale: Locale(identifier: "en")).map(\.code)) == Set(codes))
         #expect(
             CaptionsTranslationLanguage.displayName(for: "es-ES", locale: Locale(identifier: "en")) == "Spanish (Spain)"
         )
+    }
+
+    @Test("Picker options are sorted by name and the current-locale list is built once")
+    func optionsAreSortedAndCached() {
+        let locale = Locale(identifier: "en")
+        let options = CaptionsTranslationLanguage.options(locale: locale)
+        let names = options.map(\.name)
+
+        #expect(options.count == CaptionsTranslationLanguage.supportedCodes.count)
+        #expect(names == names.sorted { $0.localizedStandardCompare($1) == .orderedAscending })
+        #expect(
+            options.allSatisfy {
+                $0.name == CaptionsTranslationLanguage.displayName(for: $0.code, locale: locale)
+            })
+        #expect(CaptionsTranslationLanguage.currentLocaleOptions == CaptionsTranslationLanguage.options())
+    }
+
+    @Test(
+        "Every supported code has a capitalized name, never the raw code",
+        arguments: ["en", "es", "de", "it", "ja"])
+    func everyCodeHasACapitalizedName(localeIdentifier: String) {
+        let locale = Locale(identifier: localeIdentifier)
+
+        for code in CaptionsTranslationLanguage.supportedCodes {
+            let name = CaptionsTranslationLanguage.displayName(for: code, locale: locale)
+
+            #expect(name != code, "\(code) has no name in \(localeIdentifier)")
+            #expect(name.prefix(1) == name.prefix(1).uppercased(with: locale), "\(name) is not capitalized")
+        }
+    }
+
+    @Test("Names that ICU returns in lowercase are capitalized")
+    func lowercaseNamesAreCapitalized() {
+        #expect(
+            CaptionsTranslationLanguage.displayName(for: "es-ES", locale: Locale(identifier: "es"))
+                == "Español (España)")
+        #expect(
+            CaptionsTranslationLanguage.displayName(for: "it-IT", locale: Locale(identifier: "it"))
+                == "Italiano (Italia)")
+    }
+
+    @Test("Scottish and Welsh English, which Locale cannot name, come from the string catalog")
+    func dialectCodesComeFromTheCatalog() {
+        let locale = Locale(identifier: "en")
+        #expect(Locale(identifier: "en").localizedString(forIdentifier: "en-AB") == nil)
+        #expect(Locale(identifier: "en").localizedString(forIdentifier: "en-WL") == nil)
+
+        let scotland = CaptionsTranslationLanguage.displayName(for: "en-AB", locale: locale)
+        let wales = CaptionsTranslationLanguage.displayName(for: "en-WL", locale: locale)
+
+        #expect(scotland != wales)
+        #expect(scotland.caseInsensitiveCompare("English (Scotland)".localized) == .orderedSame)
+        #expect(wales.caseInsensitiveCompare("English (Wales)".localized) == .orderedSame)
+
+        // A missing catalog entry would echo the English key back, so guard the other languages.
+        if Locale.preferredLanguages.first?.hasPrefix("en") == false {
+            #expect(scotland != "English (Scotland)")
+            #expect(wales != "English (Wales)")
+        }
     }
 
     @Test("The factory exposes captions availability, hidden by default")

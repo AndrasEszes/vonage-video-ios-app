@@ -38,8 +38,8 @@ struct CaptionsSectionView: View {
     private var languagePicker: some View {
         Picker("Captions language".localized, selection: $viewModel.settingsPreference.captionsTranslationLanguage) {
             Text("Original (no translation)".localized).tag(String?.none)
-            ForEach(CaptionsTranslationLanguage.sortedCodes(), id: \.self) { code in
-                Text(CaptionsTranslationLanguage.displayName(for: code)).tag(String?.some(code))
+            ForEach(CaptionsTranslationLanguage.currentLocaleOptions, id: \.code) { option in
+                Text(option.name).tag(String?.some(option.code))
             }
         }
         .accessibilityIdentifier(SettingsAccessibilityID.captionsLanguagePicker)

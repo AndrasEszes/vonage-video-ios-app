@@ -90,10 +90,13 @@ appId: ${APP_ID}
 # Screenshot: Video section with some controls locked
 - takeScreenshot: 01-settings-meeting-room-video-section
 
-# Scroll to reveal audio section locked controls
-- swipe:
-    direction: "UP"
-    duration: 500
+# Scroll to reveal audio section locked controls. A fixed swipe depends on the form height, so
+# center the middle audio row instead: the other three stay on screen around it.
+- scrollUntilVisible:
+    element:
+      id: "settings-opus-dtx-locked"
+    direction: DOWN
+    centerElement: true
 
 - assertVisible:
     id: "settings-audio-bitrate-locked"
@@ -119,10 +122,11 @@ appId: ${APP_ID}
     id: "settings-captions-language-picker"
     enabled: true
 
-# Scroll more to reveal General section
-- swipe:
-    direction: "UP"
-    duration: 500
+# Scroll to the General section
+- scrollUntilVisible:
+    element:
+      id: "settings-overlay-stats-toggle"
+    direction: DOWN
 
 # General section - overlay stats toggle is always editable
 - assertVisible:

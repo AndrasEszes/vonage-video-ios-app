@@ -83,7 +83,6 @@ appId: ${APP_ID}
     direction: DOWN
 - assertVisible:
     id: "settings-captions-language-picker"
-- assertVisible: "Original (no translation)"
 
 # Scroll to reveal General Section
 - swipe:

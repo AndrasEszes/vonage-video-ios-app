@@ -602,13 +602,13 @@ struct VonageCallTests {
     // MARK: - Captions translation
 
     @Test("Captions translation language is kept for late joiners and nil restores the original")
-    func captionsTranslationLanguageIsStoredAndReset() async {
+    func captionsTranslationLanguageIsStoredAndReset() {
         let sut = makeSUT()
 
-        await sut.setCaptionsTranslationLanguage("es-ES")
+        sut.setCaptionsTranslationLanguage("es-ES")
         #expect(sut.captionsTranslationLanguage == "es-ES")
 
-        await sut.setCaptionsTranslationLanguage(nil)
+        sut.setCaptionsTranslationLanguage(nil)
         #expect(sut.captionsTranslationLanguage == nil)
     }
 

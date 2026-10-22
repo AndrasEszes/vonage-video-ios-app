@@ -998,11 +998,15 @@ public final class VonageCall: CallFacade, AudioMuteControllable, CaptionsTransl
     /// `publisherCaptions` is deliberately excluded so the local user's own captions stay original,
     /// matching Web VERA where own captions cannot be translated.
     @MainActor
-    public func setCaptionsTranslationLanguage(_ languageCode: String?) async {
+    public func setCaptionsTranslationLanguage(_ languageCode: String?) {
+        // Stored synchronously on the main actor, so the latest choice is always the stored one.
         captionsTranslationLanguage = languageCode
-        let subscribers = await callStateManager.getAllSubscribers()
-        // Read the latest value after the await so overlapping calls converge on the newest choice.
-        subscribers.forEach { $0.setCaptionsTranslationLanguage(captionsTranslationLanguage) }
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            let subscribers = await self.callStateManager.getAllSubscribers()
+            // Read after the await so overlapping updates converge on the newest choice.
+            subscribers.forEach { $0.setCaptionsTranslationLanguage(self.captionsTranslationLanguage) }
+        }
     }
 
     @MainActor

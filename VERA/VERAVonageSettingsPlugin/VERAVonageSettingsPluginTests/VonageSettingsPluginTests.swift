@@ -173,7 +173,7 @@ struct VonageSettingsPluginTests {
         await mocks.repository.updatePreferences { $0.captionsTranslationLanguage = nil }
         await delay()
 
-        #expect(mocks.call.captionsTranslationRecorder.languages == [nil, "es-ES", "fr-FR", nil])
+        #expect(await mocks.call.captionsTranslationLanguages == [nil, "es-ES", "fr-FR", nil])
         #expect(mocks.call.applyPublisherAdvancedSettingsCallCount == initialApplyCount)
         #expect(mocks.call.updateLivePublisherAdvancedSettingsCallCount == initialLiveCount)
     }

@@ -118,13 +118,13 @@ struct ArchivesViewModelTests {
         let sut = makeSUT(archivesRepository: repository)
 
         await sut.loadData()
-        let failedLoadError = await poll(read: { await MainActor.run { sut.error } }) { $0 != nil }
-        #expect(failedLoadError != nil)
+        let hadError = await poll(read: { await MainActor.run { sut.error != nil } }, until: { $0 })
+        #expect(hadError)
 
         repository.shouldFail = false
         await sut.loadData()
 
-        #expect(await MainActor.run { sut.error } == nil)
+        #expect(sut.error == nil)
     }
 
     @Test func loadDataIgnoresUpdatesFromEarlierLoad() async {
@@ -429,7 +429,7 @@ struct ArchivesViewModelTests {
 
         sut.downloadArchive(makeArchive(kind: .transcription))
 
-        _ = await poll(read: { await MainActor.run { sut.error } }) { $0 != nil }
+        _ = await poll(read: { await MainActor.run { sut.error != nil } }, until: { $0 })
         #expect(await MainActor.run { sut.downloadingArchiveIDs }.isEmpty)
     }
 
@@ -440,9 +440,9 @@ struct ArchivesViewModelTests {
 
         sut.downloadArchive(makeArchive(kind: .transcription))
 
-        let error = await poll(read: { await MainActor.run { sut.error } }) { $0 != nil }
+        let hasError = await poll(read: { await MainActor.run { sut.error != nil } }, until: { $0 })
 
-        #expect(error != nil)
+        #expect(hasError)
         #expect(await MainActor.run { sut.sharedTranscript } == nil)
     }
 

@@ -271,7 +271,8 @@ struct DefaultArchivesRepositoryTests {
         let sut = makeSUT(archivesDataSource: mockDataSource)
         let publisher = await sut.getArchives(sessionKey: "test-room")
 
-        _ = try await publisher.values.first { $0.count == 3 }
+        _ = try await collectValues(
+            from: publisher.filter { $0.count == 3 }.eraseToAnyPublisher(), count: 1, timeout: 5.0)
 
         try await Task.sleep(nanoseconds: 500_000_000)  // 500ms
         #expect(mockDataSource.callCount == 1)

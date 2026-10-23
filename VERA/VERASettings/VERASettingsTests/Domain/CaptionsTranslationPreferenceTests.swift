@@ -32,11 +32,11 @@ struct CaptionsTranslationPreferenceTests {
         #expect(decoded != .default)
     }
 
-    @Test("The language list mirrors the 54 Web SDK codes without duplicates")
-    func languageListMatchesWebSDK() {
+    @Test("The language list mirrors the 49 Web VERA codes without duplicates")
+    func languageListMatchesWeb() {
         let codes = CaptionsTranslationLanguage.supportedCodes
 
-        #expect(codes.count == 54)
+        #expect(codes.count == 49)
         #expect(Set(codes).count == codes.count)
         #expect(Set(CaptionsTranslationLanguage.options(locale: Locale(identifier: "en")).map(\.code)) == Set(codes))
         #expect(
@@ -83,24 +83,11 @@ struct CaptionsTranslationPreferenceTests {
                 == "Italiano (Italia)")
     }
 
-    @Test("Scottish and Welsh English, which Locale cannot name, come from the string catalog")
-    func dialectCodesComeFromTheCatalog() {
-        let locale = Locale(identifier: "en")
-        #expect(Locale(identifier: "en").localizedString(forIdentifier: "en-AB") == nil)
-        #expect(Locale(identifier: "en").localizedString(forIdentifier: "en-WL") == nil)
+    @Test("Languages Amazon Translate cannot target, or the system cannot name, are not offered")
+    func excludedLanguagesAreNotOffered() {
+        let excluded = ["eu-ES", "gl-ES", "zu-ZA", "en-AB", "en-WL"]
 
-        let scotland = CaptionsTranslationLanguage.displayName(for: "en-AB", locale: locale)
-        let wales = CaptionsTranslationLanguage.displayName(for: "en-WL", locale: locale)
-
-        #expect(scotland != wales)
-        #expect(scotland.caseInsensitiveCompare("English (Scotland)".localized) == .orderedSame)
-        #expect(wales.caseInsensitiveCompare("English (Wales)".localized) == .orderedSame)
-
-        // A missing catalog entry would echo the English key back, so guard the other languages.
-        if Locale.preferredLanguages.first?.hasPrefix("en") == false {
-            #expect(scotland != "English (Scotland)")
-            #expect(wales != "English (Wales)")
-        }
+        #expect(Set(CaptionsTranslationLanguage.supportedCodes).isDisjoint(with: excluded))
     }
 
     @Test("The factory exposes captions availability, hidden by default")

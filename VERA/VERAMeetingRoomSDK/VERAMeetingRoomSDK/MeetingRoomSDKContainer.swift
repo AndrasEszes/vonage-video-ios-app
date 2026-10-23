@@ -343,9 +343,14 @@ final class MeetingRoomSDKContainer {
 
     lazy var statsRepository: any StatsRepository = InMemoryStatsRepository()
 
+    var isCaptionsTranslationEnabled: Bool {
+        enabledFeatures.contains(.captions) && enabledFeatures.contains(.captionsTranslation)
+    }
+
     lazy var vonageSettingsPlugin = VonageSettingsPlugin(
         settingsRepository: settingsRepository,
-        statsWriter: statsRepository)
+        statsWriter: statsRepository,
+        isCaptionsTranslationEnabled: isCaptionsTranslationEnabled)
 
     lazy var defaultSpeakerTestService = DefaultSpeakerTestService()
 
@@ -356,7 +361,7 @@ final class MeetingRoomSDKContainer {
     lazy var settingsFactory = SettingsFactory(
         repository: settingsRepository,
         statsDataSource: statsRepository,
-        isCaptionsTranslationAvailable: enabledFeatures.contains(.captions)
+        isCaptionsTranslationAvailable: isCaptionsTranslationEnabled
     )
 
     lazy var feedbackFactory = FeedbackFactory(

@@ -80,11 +80,6 @@ private struct StartArchiveBody: Encodable {
 }
 
 /// The complete options of a transcription archive.
-///
-/// The backend replaces its whole default `archiveOptions` with the ones in the request
-/// instead of merging them, so every option of its transcription archive is repeated here.
-/// The name and tag must match the backend's: the name identifies the archive kind, and
-/// the tag lets the transcription run alongside a recording.
 private struct ArchiveOptionsBody: Encodable {
     let name = ArchiveKind.transcription.rawValue
     let multiArchiveTag = ArchiveKind.transcription.rawValue

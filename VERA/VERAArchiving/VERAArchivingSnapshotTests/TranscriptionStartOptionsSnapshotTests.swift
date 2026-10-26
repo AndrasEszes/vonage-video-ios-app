@@ -25,7 +25,7 @@ struct TranscriptionStartOptionsSnapshotTests {
         "TranscriptionStartOptions - Options",
         arguments: [
             ("Default", TranscriptionOptions.default),
-            ("SummaryOff_Japanese", TranscriptionOptions(hasSummary: false, language: .japanese)),
+            ("SummaryOff", TranscriptionOptions(hasSummary: false)),
         ])
     func options(variant: String, options: TranscriptionOptions) throws {
         snapshot(makeSUT(options: options), named: variant)
@@ -62,7 +62,7 @@ struct TranscriptionStartOptionsSnapshotTests {
     ) {
         assertSnapshot(
             of: view,
-            as: .image(precision: 0.99, layout: .fixed(width: 390, height: 360)),
+            as: .image(precision: 0.99, layout: .fixed(width: 390, height: 300)),
             named: named,
             record: isRecording,
             testName: "\(snapshotPrefix)_\(named)",

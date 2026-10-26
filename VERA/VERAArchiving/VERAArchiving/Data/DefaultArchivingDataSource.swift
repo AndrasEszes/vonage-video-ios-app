@@ -75,11 +75,22 @@ private struct StartArchiveBody: Encodable {
     /// Asks the backend for a post-call transcription archive instead of a recording.
     /// Omitted for recordings so the request matches backends without transcription support.
     let withTranscription: Bool?
-    /// Overrides the backend's default transcription options. Omitted when none were chosen.
+    /// Replaces the backend's default transcription archive options. Omitted when none were chosen.
     let archiveOptions: ArchiveOptionsBody?
 }
 
+/// The complete options of a transcription archive.
+///
+/// The backend replaces its whole default `archiveOptions` with the ones in the request
+/// instead of merging them, so every option of its transcription archive is repeated here.
+/// The name and tag must match the backend's: the name identifies the archive kind, and
+/// the tag lets the transcription run alongside a recording.
 private struct ArchiveOptionsBody: Encodable {
+    let name = ArchiveKind.transcription.rawValue
+    let multiArchiveTag = ArchiveKind.transcription.rawValue
+    let outputMode = "individual"
+    let hasAudio = true
+    let hasVideo = false
     let hasTranscription = true
     let transcriptionProperties: TranscriptionPropertiesBody
 

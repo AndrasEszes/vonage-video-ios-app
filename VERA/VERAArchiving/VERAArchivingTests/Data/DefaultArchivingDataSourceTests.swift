@@ -110,6 +110,29 @@ struct DefaultArchivingDataSourceTests {
         #expect(properties["primaryLanguageCode"] == nil)
     }
 
+    /// The backend replaces its default transcription archive options with the request's,
+    /// so a partial set makes Vonage reject the archive.
+    @Test("Start transcription sends the complete transcription archive options")
+    func startTranscriptionSendsCompleteArchiveOptions() async throws {
+        let httpClient = MockHTTPClient()
+        httpClient.data = try makeStartArchivingJSONResponse()
+
+        let sut = makeSUT(httpClient: httpClient)
+
+        _ = try await sut.startArchiving(
+            makeStartArchivingRequest(kind: .transcription, transcriptionOptions: .default))
+
+        let body = try recordedBody(httpClient)
+        let archiveOptions = try #require(body["archiveOptions"] as? [String: Any])
+        #expect(archiveOptions["name"] as? String == "transcription")
+        #expect(archiveOptions["multiArchiveTag"] as? String == "transcription")
+        #expect(archiveOptions["outputMode"] as? String == "individual")
+        #expect(archiveOptions["hasAudio"] as? Bool == true)
+        #expect(archiveOptions["hasVideo"] as? Bool == false)
+        #expect(archiveOptions["hasTranscription"] as? Bool == true)
+        #expect(archiveOptions["transcriptionProperties"] != nil)
+    }
+
     @Test("Start recording never sends transcription archive options")
     func startRecordingIgnoresTranscriptionOptions() async throws {
         let httpClient = MockHTTPClient()

@@ -990,13 +990,11 @@ public final class VonageCall: CallFacade, AudioMuteControllable, CaptionsTransl
 
     public var areCaptionsEnabled: Bool { _captionsEnabled.value }
 
-    /// BCP-47 language remote captions are translated into; `nil` keeps the original language.
+    /// BCP-47 language captions are translated into; `nil` keeps the original language.
     @MainActor public private(set) var captionsTranslationLanguage: String?
 
-    /// Applies the translation language to every remote subscriber and to those that join later.
-    ///
-    /// `publisherCaptions` is deliberately excluded so the local user's own captions stay original,
-    /// matching Web VERA where own captions cannot be translated.
+    /// Applies the translation language to every remote subscriber, to those that join later, and to
+    /// `publisherCaptions`, the subscriber that delivers the local user's own captions.
     @MainActor
     public func setCaptionsTranslationLanguage(_ languageCode: String?) {
         // Stored synchronously on the main actor, so the latest choice is always the stored one.
@@ -1006,6 +1004,7 @@ public final class VonageCall: CallFacade, AudioMuteControllable, CaptionsTransl
             let subscribers = await self.callStateManager.getAllSubscribers()
             // Read after the await so overlapping updates converge on the newest choice.
             subscribers.forEach { $0.setCaptionsTranslationLanguage(self.captionsTranslationLanguage) }
+            self.publisherCaptions?.setCaptionsTranslationLanguage(self.captionsTranslationLanguage)
         }
     }
 
@@ -1029,12 +1028,14 @@ public final class VonageCall: CallFacade, AudioMuteControllable, CaptionsTransl
         stopCaptionCleanup()
     }
 
+    @MainActor
     private func subscribeToPublisherCaptions(_ stream: OTStream) {
         do {
             let vonageSubscriber = try subscriberFactory.makeSubscriber(stream)
             vonageSubscriber.onError = { [weak self] in
                 self?.removeSubscriber(stream)
             }
+            vonageSubscriber.setCaptionsTranslationLanguage(captionsTranslationLanguage)
 
             try requireSession().subscribe(subscriber: vonageSubscriber)
 

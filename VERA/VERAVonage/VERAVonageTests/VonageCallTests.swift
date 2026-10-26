@@ -612,6 +612,27 @@ struct VonageCallTests {
         #expect(sut.captionsTranslationLanguage == nil)
     }
 
+    @Test("Own captions follow the translation language too")
+    func ownCaptionsFollowTheTranslationLanguage() async throws {
+        let sut = makeSUT()
+        guard let ownCaptions = try? VonageSubscriberFactory().makeSubscriber(OTStream()) else { return }
+        sut.publisherCaptions = ownCaptions
+
+        sut.setCaptionsTranslationLanguage("es-ES")
+        try await waitUntil { ownCaptions.otSubscriber.captionsTranslationLanguage == "es-ES" }
+
+        sut.setCaptionsTranslationLanguage(nil)
+        try await waitUntil { ownCaptions.otSubscriber.captionsTranslationLanguage == nil }
+    }
+
+    /// Waits for the main-actor task that applies the language to subscribers.
+    private func waitUntil(_ condition: () -> Bool) async throws {
+        for _ in 0..<100 where !condition() {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        #expect(condition())
+    }
+
     @Test("Subscribers forward the translation language to the SDK subscriber")
     func subscriberForwardsTranslationLanguageToSDK() throws {
         guard let subscriber = try? VonageSubscriberFactory().makeSubscriber(OTStream()) else { return }

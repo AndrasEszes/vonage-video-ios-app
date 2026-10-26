@@ -24,7 +24,7 @@ Meeting-room features (chat, captions, reactions, screen share) are **not** in t
 
 Code guarded by `#if ARCHIVING_ENABLED … #endif` is only compiled when that flag is active. `DependencyContainer.swift` follows the same pattern to conditionally instantiate feature objects.
 
-`meetingRoomSettings.allowCaptionTranslation` has no compilation condition. It is a runtime flag that enables `MeetingRoomFeature.captionsTranslation`, which adds a Captions section to Settings where each user picks the language other participants' captions are translated into. It only takes effect together with `allowCaptions`, and it defaults to `false` when the key is missing. Translation is a private beta feature of the Vonage Video API, so it must be enabled for your project.
+`meetingRoomSettings.allowCaptionTranslation` has no compilation condition. It is a runtime flag that enables `MeetingRoomFeature.captionsTranslation`, which adds a Captions section to Settings where each user picks the language their captions are translated into, including their own. It only takes effect together with `allowCaptions`, and it defaults to `false` when the key is missing. Translation is a private beta feature of the Vonage Video API, so it must be enabled for your project.
 
 `meetingRoomSettings.allowPostCallTranscription` has no compilation condition. It is a runtime flag that enables `MeetingRoomFeature.postCallTranscription` in the meeting room SDK, which adds a Start/Stop transcription button next to the Record button. Transcription runs as a separate archive from the recording, so both can run at the same time. It requires a backend whose `startArchive` endpoint supports `withTranscription`.
 

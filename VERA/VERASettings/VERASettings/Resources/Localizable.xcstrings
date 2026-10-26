@@ -337,50 +337,50 @@
         }
       }
     },
-    "Translates other participants' captions into the selected language. Your own captions stay in the original language." : {
-      "comment" : "Footer explaining captions translation.\nWeb VERA has no translation for this key yet (Live Captions Translations, VIDSOL-1471).",
+    "Translates all captions into the selected language, including your own." : {
+      "comment" : "Footer explaining that captions translation applies to every caption, including the user's own.\nWeb VERA has no translation for this key yet (Live Captions Translations, VIDSOL-1471).",
       "extractionState" : "manual",
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Übersetzt die Untertitel der anderen Teilnehmenden in die ausgewählte Sprache. Deine eigenen Untertitel bleiben in der Originalsprache."
+            "value" : "Übersetzt alle Untertitel in die ausgewählte Sprache, auch deine eigenen."
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Translates other participants' captions into the selected language. Your own captions stay in the original language."
+            "value" : "Translates all captions into the selected language, including your own."
           }
         },
         "en-US" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Translates other participants' captions into the selected language. Your own captions stay in the original language."
+            "value" : "Translates all captions into the selected language, including your own."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Traduce los subtítulos de los demás participantes al idioma seleccionado. Tus propios subtítulos se mantienen en el idioma original."
+            "value" : "Traduce todos los subtítulos al idioma seleccionado, incluidos los tuyos."
           }
         },
         "es-MX" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Traduce los subtítulos de los demás participantes al idioma seleccionado. Tus propios subtítulos se mantienen en el idioma original."
+            "value" : "Traduce todos los subtítulos al idioma seleccionado, incluidos los tuyos."
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Traduce i sottotitoli degli altri partecipanti nella lingua selezionata. I tuoi sottotitoli restano nella lingua originale."
+            "value" : "Traduce tutti i sottotitoli nella lingua selezionata, compresi i tuoi."
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "他の参加者の字幕を選択した言語に翻訳します。自分の字幕は元の言語のままです。"
+            "value" : "自分の字幕も含め、すべての字幕を選択した言語に翻訳します。"
           }
         }
       }

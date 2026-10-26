@@ -47,8 +47,7 @@ struct CaptionsSectionView: View {
 
     private var descriptionText: some View {
         Text(
-            "Translates other participants' captions into the selected language. Your own captions stay in the original language."
-                .localized
+            "Translates all captions into the selected language, including your own.".localized
         )
         .font(.footnote)
         .foregroundStyle(.secondary)

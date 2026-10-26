@@ -48,22 +48,6 @@ struct TranscriptionStartOptionsView: View {
             .tint(VERACommonUIAsset.SemanticColors.primary.swiftUIColor)
             .accessibilityIdentifier(ArchivingAccessibilityID.transcriptionSummaryToggle)
 
-            HStack {
-                Text("Language", bundle: .veraArchiving)
-                    .adaptiveFont(.bodyBase)
-                Spacer()
-                Picker(selection: $options.language) {
-                    ForEach(TranscriptionLanguage.allCases) { language in
-                        Text(language.displayName).tag(language)
-                    }
-                } label: {
-                    Text("Language", bundle: .veraArchiving)
-                }
-                .pickerStyle(.menu)
-                .tint(VERACommonUIAsset.SemanticColors.primary.swiftUIColor)
-                .accessibilityIdentifier(ArchivingAccessibilityID.transcriptionLanguagePicker)
-            }
-
             HStack(spacing: 12) {
                 OutlinedButton(
                     text: Text("Cancel", bundle: .veraArchiving),
@@ -82,16 +66,6 @@ struct TranscriptionStartOptionsView: View {
         }
         .padding(24)
         .frame(maxWidth: .infinity, alignment: .leading)
-    }
-}
-
-extension TranscriptionLanguage {
-    /// The language name in the user's current locale, e.g. "English".
-    ///
-    /// Only the language is shown because each one is offered in a single regional variant.
-    var displayName: String {
-        let languageCode = Locale.Language(identifier: code).languageCode?.identifier ?? code
-        return Locale.current.localizedString(forLanguageCode: languageCode) ?? code
     }
 }
 

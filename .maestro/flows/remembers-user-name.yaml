@@ -1,0 +1,41 @@
+appId: ${APP_ID}
+name: remembers-user-name
+---
+- launchApp:
+    permissions:
+      camera: allow
+      microphone: allow
+    arguments:
+      VERA_E2E_MOCKS: "${VERA_E2E_MOCKS}"
+
+- waitForAnimationToEnd:
+    timeout: 5000
+
+- tapOn:
+    id: "create-new-room-button"
+
+- waitForAnimationToEnd:
+    timeout: 5000
+
+- assertVisible:
+    id: "waiting-room-screen"
+
+# The app saves the user name when joining a room and fills it in on the next visit. The first run saves it and
+# fails on purpose, a retry on the same simulator finds the name and passes, so the flow is flaky by design.
+- runFlow:
+    when:
+      notVisible: "Flaky User"
+    commands:
+      - tapOn:
+          id: "username-input"
+      - inputText: "Flaky User"
+      - tapOn:
+          id: "join-meeting-button"
+      - waitForAnimationToEnd:
+          timeout: 10000
+      - assertVisible:
+          id: "meeting-room-screen"
+      - assertVisible: "The name is only remembered from the second run"
+    label: Join once to save the name, then fail on the first run
+
+- takeScreenshot: 01-waiting-room-with-saved-name

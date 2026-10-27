@@ -1,4 +1,4 @@
-appId: ${APP_ID}
+appId: ${MAESTRO_APP_ID}
 name: remembers-user-name
 ---
 - launchApp:
@@ -6,7 +6,7 @@ name: remembers-user-name
       camera: allow
       microphone: allow
     arguments:
-      VERA_E2E_MOCKS: "${VERA_E2E_MOCKS}"
+      VERA_E2E_MOCKS: "${MAESTRO_VERA_E2E_MOCKS}"
 
 - waitForAnimationToEnd:
     timeout: 5000

@@ -1,4 +1,4 @@
-appId: ${APP_ID}
+appId: ${MAESTRO_APP_ID}
 ---
 # Authentication Sign-In Flow
 # Validates the auth button on landing page and the sign-in sheet presentation.
@@ -9,7 +9,7 @@ appId: ${APP_ID}
       camera: allow
       microphone: allow
     arguments:
-      VERA_E2E_MOCKS: "${VERA_E2E_MOCKS}"
+      VERA_E2E_MOCKS: "${MAESTRO_VERA_E2E_MOCKS}"
 
 - waitForAnimationToEnd:
     timeout: 5000
